@@ -87,6 +87,13 @@ bash scripts/collect_compact_results.sh robust_same_compute_9seed results/robust
 fixed JSONL probe. `configs/large_model_same_compute_pilot.json` is a larger
 model stress test; run smoke first before committing GPU time to a full run.
 
+To queue the curated nine-seed follow-up after the same-compute nine-seed run
+passes its gates:
+
+```bash
+bash scripts/run_robust_followup_queue.sh
+```
+
 ## What Gets Checked
 
 - same-W0 gate: all `train_k` models for the same seed start from the same

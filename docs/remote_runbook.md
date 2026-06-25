@@ -116,6 +116,13 @@ bash scripts/check_background.sh robust_curated_probe_9seed
 bash scripts/launch_background.sh robust_curated_probe_9seed full configs/robust_curated_probe_9seed.json cuda
 ```
 
+Or queue it automatically after the same-compute nine-seed full run passes its
+summary gates:
+
+```bash
+bash scripts/run_robust_followup_queue.sh
+```
+
 The larger model config is a stress test. Do not launch its full run until its
 smoke run exits successfully:
 
