@@ -31,8 +31,40 @@ python -m moe_topk.scratch_pilot --mode smoke --config configs/scratch_pilot.jso
 python -m moe_topk.scratch_pilot --mode full --config configs/scratch_pilot.json --output-root /tmp/2020110906_matryo_topk --device cuda
 ```
 
+For detached background execution, prefer the helper scripts:
+
+```bash
+bash scripts/launch_background.sh scratch_pilot smoke configs/scratch_pilot.json cuda
+bash scripts/check_background.sh scratch_pilot
+bash scripts/launch_background.sh scratch_pilot full configs/scratch_pilot.json cuda
+bash scripts/check_background.sh scratch_pilot
+bash scripts/collect_compact_results.sh scratch_pilot results/scratch_pilot_summary full
+```
+
 The full pilot runs `train_k={1,2,4}` x `seed={0,1,2}`. It writes raw route
 tables as `.npz` files under `/tmp`, not into git.
+
+## Follow-up Pilots
+
+The initial pilot uses equal training steps. Two follow-up configs are included
+to test whether the result survives stricter checks:
+
+- `configs/same_compute_pilot.json`: approximates equal compute by running
+  `train_k=1` longer than `train_k=2`, and `train_k=2` longer than `train_k=4`.
+- `configs/curated_probe_pilot.json`: uses the same compute schedule but
+  evaluates routing on fixed JSONL prompts in `probes/curated_probe.jsonl`.
+
+Run them one at a time on the single GPU:
+
+```bash
+bash scripts/launch_background.sh same_compute_pilot smoke configs/same_compute_pilot.json cuda
+bash scripts/check_background.sh same_compute_pilot
+bash scripts/launch_background.sh same_compute_pilot full configs/same_compute_pilot.json cuda
+
+bash scripts/launch_background.sh curated_probe_pilot smoke configs/curated_probe_pilot.json cuda
+bash scripts/check_background.sh curated_probe_pilot
+bash scripts/launch_background.sh curated_probe_pilot full configs/curated_probe_pilot.json cuda
+```
 
 ## What Gets Checked
 

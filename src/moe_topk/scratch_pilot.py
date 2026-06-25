@@ -4,8 +4,6 @@ import argparse
 import csv
 import datetime as dt
 import json
-import os
-import shutil
 import subprocess
 import sys
 import traceback
@@ -16,7 +14,7 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 
-from moe_topk.data import CATEGORIES, Corpus, batch_indices, build_corpus
+from moe_topk.data import CATEGORIES, Corpus, batch_indices, build_corpus, build_jsonl_corpus
 from moe_topk.metrics import expert_frequency, metric_rows_for_pair, topk_ids_from_logits
 from moe_topk.model import ModelConfig, TinyMoETransformer
 
@@ -70,6 +68,27 @@ def ce_loss(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
 
 def route_filename(seed: int, train_k: int, infer_k: int, step: int) -> str:
     return f"routes/seed{seed}_train{train_k}_infer{infer_k}_step{step}.npz"
+
+
+def steps_for_train_k(config: dict[str, Any], train_k: int, mode: str) -> int:
+    if mode == "smoke":
+        return int(config["smoke_steps"])
+    per_k = config.get("train_steps_by_k", {})
+    return int(per_k.get(str(train_k), config["steps"]))
+
+
+def checkpoints_for_train_k(
+    config: dict[str, Any],
+    train_k: int,
+    steps: int,
+    mode: str,
+) -> list[int]:
+    if mode == "smoke":
+        return [0, steps]
+    per_k = config.get("checkpoints_by_k", {})
+    raw = per_k.get(str(train_k), config["checkpoints"])
+    values = sorted({int(step) for step in raw if int(step) <= steps} | {0, steps})
+    return values
 
 
 def evaluate_and_collect(
@@ -338,6 +357,17 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
         "extra",
     ]
     final_step = max(int(row["checkpoint_step"]) for row in manifest)
+    final_step_by_train: dict[tuple[int, int], int] = {}
+    for row in manifest:
+        seed = int(row["seed"])
+        train_k = int(row["train_k"])
+        infer_k = int(row["inference_k"])
+        step = int(row["checkpoint_step"])
+        if train_k == infer_k:
+            final_step_by_train[(seed, train_k)] = max(
+                final_step_by_train.get((seed, train_k), -1),
+                step,
+            )
     with metrics_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
@@ -366,7 +396,14 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
 
         pair_specs = [(1, 2), (1, 4), (2, 4)]
         for seed in config["seeds"]:
-            for step in config["checkpoints"]:
+            seed_steps = sorted(
+                {
+                    int(row["checkpoint_step"])
+                    for row in manifest
+                    if int(row["seed"]) == int(seed)
+                }
+            )
+            for step in seed_steps:
                 for train_k in config["train_ks"]:
                     reference_key = (seed, train_k, max(config["inference_ks"]), step)
                     if reference_key not in index:
@@ -523,6 +560,40 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
                             value=value,
                         )
 
+            for small, large in pair_specs:
+                step_a = final_step_by_train.get((int(seed), small))
+                step_b = final_step_by_train.get((int(seed), large))
+                if step_a is None or step_b is None:
+                    continue
+                key_a = (int(seed), small, small, step_a)
+                key_b = (int(seed), large, large, step_b)
+                if key_a not in index or key_b not in index:
+                    continue
+                a = route(key_a)
+                b = route(key_b)
+                for name, value in metric_rows_for_pair(
+                    "matched_train_k_final_pair",
+                    a["selected_ids"],
+                    b["selected_ids"],
+                    a["gate_logits"],
+                    b["gate_logits"],
+                    int(config["n_experts"]),
+                ):
+                    write_metric_row(
+                        writer,
+                        metric_type="matched_train_k_final_pair",
+                        metric_name=name,
+                        seed=seed,
+                        checkpoint_step=f"{step_a}/{step_b}",
+                        train_k=small,
+                        inference_k=small,
+                        train_k_b=large,
+                        inference_k_b=large,
+                        pair=f"{small}-{large}",
+                        value=value,
+                        extra="own_final_steps",
+                    )
+
     summary = summarize(run_dir, config, manifest, metrics_path, final_step)
     write_plots(run_dir, metrics_path)
     return summary
@@ -541,13 +612,31 @@ def summarize(
     final_step: int,
 ) -> dict[str, Any]:
     rows = _read_metric_rows(metrics_path)
-    expected_runs = len(config["seeds"]) * len(config["train_ks"])
+    expected_runs = len(
+        {
+            (int(row["seed"]), int(row["train_k"]))
+            for row in manifest
+            if int(row["inference_k"]) == int(row["train_k"])
+        }
+    )
+    final_step_by_train: dict[tuple[int, int], int] = {}
+    for row in manifest:
+        seed = int(row["seed"])
+        train_k = int(row["train_k"])
+        infer_k = int(row["inference_k"])
+        step = int(row["checkpoint_step"])
+        if train_k == infer_k:
+            final_step_by_train[(seed, train_k)] = max(
+                final_step_by_train.get((seed, train_k), -1),
+                step,
+            )
     completed_runs = len(
         {
             (int(row["seed"]), int(row["train_k"]))
             for row in manifest
-            if int(row["checkpoint_step"]) == final_step
-            and int(row["inference_k"]) == int(row["train_k"])
+            if int(row["inference_k"]) == int(row["train_k"])
+            and int(row["checkpoint_step"])
+            == final_step_by_train.get((int(row["seed"]), int(row["train_k"])))
         }
     )
 
@@ -576,17 +665,37 @@ def summarize(
     final_pair_rows = [
         row
         for row in rows
-        if row["metric_type"] == "matched_train_k_pair"
+        if row["metric_type"] == "matched_train_k_final_pair"
         and row["metric_name"] in {"nestedness", "top1_agreement", "spearman"}
-        and int(row["checkpoint_step"]) == final_step
     ]
+    final_mismatch_rows = []
+    for row in rows:
+        if row["metric_type"] != "mismatch_cost" or row["metric_name"] != "validation_loss_delta":
+            continue
+        seed = int(row["seed"])
+        train_k = int(row["train_k"])
+        expected_step = final_step_by_train.get((seed, train_k))
+        if expected_step is not None and int(row["checkpoint_step"]) == expected_step:
+            final_mismatch_rows.append(row)
 
     pair_values: dict[tuple[str, str], list[float]] = {}
     for row in final_pair_rows:
         pair_values.setdefault((row["pair"], row["metric_name"]), []).append(float(row["value"]))
 
+    mismatch_values: dict[tuple[str, str], list[float]] = {}
+    for row in final_mismatch_rows:
+        mismatch_values.setdefault((row["train_k"], row["inference_k"]), []).append(float(row["value"]))
+
+    candidate_lines = []
+    for (pair, metric), values in sorted(pair_values.items()):
+        if metric not in {"nestedness", "top1_agreement"}:
+            continue
+        below = sum(1 for value in values if value < 0.95)
+        candidate_lines.append((pair, metric, below, len(values), below >= 2))
+
+    title = str(config.get("experiment_name", "scratch_pilot")).replace("_", " ").title()
     lines = [
-        "# Scratch Pilot Summary",
+        f"# {title} Summary",
         "",
         f"Run directory: `{run_dir}`",
         f"Expected completed runs: {expected_runs}",
@@ -610,6 +719,16 @@ def summarize(
         mean_value = sum(values) / max(1, len(values))
         value_text = ", ".join(f"{value:.4f}" for value in values)
         lines.append(f"| {pair} | {metric} | {mean_value:.4f} | {value_text} |")
+
+    lines.extend(["", "## Final Mismatch Cost", "", "| train_k | inference_k | mean_delta_loss | values |", "|---:|---:|---:|---|"])
+    for (train_k, inference_k), values in sorted(mismatch_values.items(), key=lambda item: (int(item[0][0]), int(item[0][1]))):
+        mean_value = sum(values) / max(1, len(values))
+        value_text = ", ".join(f"{value:.4f}" for value in values)
+        lines.append(f"| {train_k} | {inference_k} | {mean_value:.4f} | {value_text} |")
+
+    lines.extend(["", "## Candidate Direction Check", "", "| pair | metric | seeds_below_0.95 | candidate_effect |", "|---|---|---:|---|"])
+    for pair, metric, below, total, is_candidate in candidate_lines:
+        lines.append(f"| {pair} | {metric} | {below}/{total} | {str(is_candidate).lower()} |")
 
     lines.extend(
         [
@@ -650,10 +769,8 @@ def write_plots(run_dir: Path, metrics_path: Path) -> None:
         return
 
     rows = _read_metric_rows(metrics_path)
-    final_steps = [int(row["checkpoint_step"]) for row in rows if row["checkpoint_step"]]
-    if not final_steps:
+    if not any(row["checkpoint_step"].isdigit() for row in rows):
         return
-    final_step = max(final_steps)
     plot_dir = run_dir / "plots"
     plot_dir.mkdir(exist_ok=True)
 
@@ -661,9 +778,8 @@ def write_plots(run_dir: Path, metrics_path: Path) -> None:
         selected = [
             row
             for row in rows
-            if row["metric_type"] == "matched_train_k_pair"
+            if row["metric_type"] == "matched_train_k_final_pair"
             and row["metric_name"] == metric_name
-            and int(row["checkpoint_step"]) == final_step
         ]
         if not selected:
             continue
@@ -688,15 +804,11 @@ def run_all(config: dict[str, Any], run_dir: Path, mode: str, device: torch.devi
     if mode == "smoke":
         seeds = [int(config["seeds"][0])]
         train_ks = [int(config["train_ks"][0])]
-        steps = int(config["smoke_steps"])
-        checkpoints = [0, steps]
         train_samples = int(config["smoke_train_samples_per_category"])
         probe_samples = int(config["smoke_probe_samples_per_category"])
     else:
         seeds = [int(x) for x in config["seeds"]]
         train_ks = [int(x) for x in config["train_ks"]]
-        steps = int(config["steps"])
-        checkpoints = [int(x) for x in config["checkpoints"] if int(x) <= steps]
         train_samples = int(config["train_samples_per_category"])
         probe_samples = int(config["probe_samples_per_category"])
 
@@ -705,11 +817,14 @@ def run_all(config: dict[str, Any], run_dir: Path, mode: str, device: torch.devi
         seq_len=int(config["seq_len"]),
         seed=int(config["data_seed"]),
     )
-    probe_corpus = build_corpus(
-        samples_per_category=probe_samples,
-        seq_len=int(config["seq_len"]),
-        seed=int(config["data_seed"]) + 99_999,
-    )
+    if config.get("probe_jsonl"):
+        probe_corpus = build_jsonl_corpus(Path(config["probe_jsonl"]), seq_len=int(config["seq_len"]))
+    else:
+        probe_corpus = build_corpus(
+            samples_per_category=probe_samples,
+            seq_len=int(config["seq_len"]),
+            seed=int(config["data_seed"]) + 99_999,
+        )
     task_to_id = {task: idx for idx, task in enumerate(CATEGORIES)}
 
     checkpoint_dir = run_dir / "checkpoints"
@@ -721,6 +836,8 @@ def run_all(config: dict[str, Any], run_dir: Path, mode: str, device: torch.devi
         torch.save(initial_state, checkpoint_dir / f"W0_seed{seed}.pt")
         del base_model
         for train_k in train_ks:
+            steps = steps_for_train_k(config, train_k, mode)
+            checkpoints = checkpoints_for_train_k(config, train_k, steps, mode)
             print(f"[run] seed={seed} train_k={train_k} steps={steps}", flush=True)
             train_one(
                 config=config,
@@ -756,9 +873,18 @@ def main() -> None:
     parser.add_argument("--mode", choices=["smoke", "full"], default="smoke")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--timestamp", default=None)
+    parser.add_argument("--run-name", default=None)
     args = parser.parse_args()
 
     base_config = load_config(args.config)
+    if base_config.get("probe_jsonl"):
+        probe_path = Path(str(base_config["probe_jsonl"]))
+        if not probe_path.is_absolute():
+            cwd_probe_path = Path.cwd() / probe_path
+            config_probe_path = args.config.parent / probe_path
+            base_config["probe_jsonl"] = str(
+                (cwd_probe_path if cwd_probe_path.exists() else config_probe_path).resolve()
+            )
     if args.device == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA requested but torch.cuda.is_available() is false")
     device = torch.device(args.device)
@@ -768,7 +894,8 @@ def main() -> None:
     last_error = None
     for idx, fallback in enumerate(fallbacks):
         config = apply_fallback(base_config, fallback)
-        run_dir = args.output_root / "runs" / "scratch_pilot" / f"{timestamp}_{args.mode}_fb{idx}_b{config['batch_size']}_d{config['d_model']}"
+        run_name = args.run_name or str(config.get("experiment_name", "scratch_pilot"))
+        run_dir = args.output_root / "runs" / run_name / f"{timestamp}_{args.mode}_fb{idx}_b{config['batch_size']}_d{config['d_model']}"
         try:
             run_all(config=config, run_dir=run_dir, mode=args.mode, device=device)
             print(f"[done] {run_dir}", flush=True)

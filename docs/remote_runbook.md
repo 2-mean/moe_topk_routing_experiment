@@ -66,7 +66,36 @@ Detach with `Ctrl-b d`, reattach with:
 tmux attach -t matryo_topk
 ```
 
-## 5. Copy Compact Results Into Repo
+## 5. Detached Background Runs
+
+Use this route for stable unattended execution. It creates a detached `tmux`
+session, writes logs under `/tmp/2020110906_matryo_topk/logs`, and keeps raw
+artifacts under `/tmp/2020110906_matryo_topk/runs`.
+
+```bash
+cd ~/moe_topk_routing_experiment
+bash scripts/launch_background.sh scratch_pilot smoke configs/scratch_pilot.json cuda
+bash scripts/check_background.sh scratch_pilot
+bash scripts/launch_background.sh scratch_pilot full configs/scratch_pilot.json cuda
+bash scripts/check_background.sh scratch_pilot
+```
+
+Follow-up experiments should be run one at a time:
+
+```bash
+bash scripts/launch_background.sh same_compute_pilot smoke configs/same_compute_pilot.json cuda
+bash scripts/check_background.sh same_compute_pilot
+bash scripts/launch_background.sh same_compute_pilot full configs/same_compute_pilot.json cuda
+
+bash scripts/launch_background.sh curated_probe_pilot smoke configs/curated_probe_pilot.json cuda
+bash scripts/check_background.sh curated_probe_pilot
+bash scripts/launch_background.sh curated_probe_pilot full configs/curated_probe_pilot.json cuda
+```
+
+If a run fails, inspect the latest log reported by `check_background.sh` before
+starting another run.
+
+## 6. Copy Compact Results Into Repo
 
 ```bash
 LATEST=$(ls -td /tmp/2020110906_matryo_topk/runs/scratch_pilot/*_full_* | head -1)
@@ -79,3 +108,11 @@ cp "$LATEST"/plots/*.png results/scratch_pilot_summary/plots/ 2>/dev/null || tru
 ```
 
 Do not commit `routes/*.npz` or checkpoints.
+
+The helper script performs the same compact copy for any named run:
+
+```bash
+bash scripts/collect_compact_results.sh scratch_pilot results/scratch_pilot_summary full
+bash scripts/collect_compact_results.sh same_compute_pilot results/same_compute_summary full
+bash scripts/collect_compact_results.sh curated_probe_pilot results/curated_probe_summary full
+```

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import random
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 
 import torch
@@ -99,9 +101,35 @@ def build_corpus(samples_per_category: int, seq_len: int, seed: int) -> Corpus:
     )
 
 
+def build_jsonl_corpus(path: Path, seq_len: int) -> Corpus:
+    rows: list[list[int]] = []
+    sample_ids: list[str] = []
+    task_types: list[str] = []
+    with path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            item = json.loads(line)
+            sample_id = str(item.get("sample_id", f"jsonl_{line_number:05d}"))
+            task_type = str(item["task_type"])
+            text = str(item["text"])
+            if task_type not in CATEGORIES:
+                raise ValueError(f"unknown task_type {task_type!r} at {path}:{line_number}")
+            rows.append(_encode_bytes(text, seq_len))
+            sample_ids.append(sample_id)
+            task_types.append(task_type)
+    if not rows:
+        raise ValueError(f"no probe rows found in {path}")
+    return Corpus(
+        tokens=torch.tensor(rows, dtype=torch.long),
+        sample_ids=sample_ids,
+        task_types=task_types,
+    )
+
+
 def batch_indices(num_items: int, batch_size: int, steps: int, seed: int) -> Iterable[torch.Tensor]:
     generator = torch.Generator()
     generator.manual_seed(seed)
     for _ in range(steps):
         yield torch.randint(0, num_items, (batch_size,), generator=generator)
-

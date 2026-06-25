@@ -1,0 +1,42 @@
+{"sample_id":"general_ko_0001","task_type":"general_ko","text":"오늘 회의에서는 모델 배포 일정과 위험 요소를 점검하고, 남은 작업을 담당자별로 정리했다."}
+{"sample_id":"general_ko_0002","task_type":"general_ko","text":"사용자는 빠른 응답보다 신뢰할 수 있는 근거와 재현 가능한 결과를 더 중요하게 평가했다."}
+{"sample_id":"general_ko_0003","task_type":"general_ko","text":"강의 자료는 표와 예제로 구성되어야 하며, 처음 읽는 학생도 흐름을 따라갈 수 있어야 한다."}
+{"sample_id":"general_ko_0004","task_type":"general_ko","text":"서버의 저장 공간이 부족하면 불필요한 캐시를 먼저 확인하고 중요한 산출물은 따로 보존한다."}
+{"sample_id":"general_ko_0005","task_type":"general_ko","text":"연구 계획은 가설, 실험 조건, 실패 기준, 해석 범위를 함께 적어야 오해가 줄어든다."}
+{"sample_id":"general_ko_0006","task_type":"general_ko","text":"새로운 기능은 작은 예제로 검증한 뒤 실제 데이터와 더 큰 설정으로 확장하는 편이 안전하다."}
+{"sample_id":"general_en_0001","task_type":"general_en","text":"The experiment should separate router preference from dispatch constraints before making a claim."}
+{"sample_id":"general_en_0002","task_type":"general_en","text":"A reliable runbook records the environment, command, output path, and failure recovery steps."}
+{"sample_id":"general_en_0003","task_type":"general_en","text":"The first result is promising, but the conclusion remains limited until a fair compute budget is tested."}
+{"sample_id":"general_en_0004","task_type":"general_en","text":"When a remote session disconnects, the job must keep running and write logs that can be inspected later."}
+{"sample_id":"general_en_0005","task_type":"general_en","text":"The summary should report completed runs, sanity gates, collapsed experts, and seed-level consistency."}
+{"sample_id":"general_en_0006","task_type":"general_en","text":"A model can pass a technical smoke test while still failing to support a strong research claim."}
+{"sample_id":"math_ko_0001","task_type":"math_ko","text":"행렬 A의 고유값과 고유벡터를 구하고, 주어진 벡터가 어느 고유공간에 속하는지 확인하라."}
+{"sample_id":"math_ko_0002","task_type":"math_ko","text":"손실 함수의 기울기가 0이 되는 지점을 찾고, 그 지점이 최소값인지 헤시안으로 판단한다."}
+{"sample_id":"math_ko_0003","task_type":"math_ko","text":"확률변수 X와 Y가 독립이면 결합분포는 주변분포의 곱으로 표현된다."}
+{"sample_id":"math_ko_0004","task_type":"math_ko","text":"분산은 제곱의 기댓값에서 기댓값의 제곱을 뺀 값으로 계산할 수 있다."}
+{"sample_id":"math_ko_0005","task_type":"math_ko","text":"특이값 분해는 행렬을 직교기저와 대각 성분의 곱으로 나누어 해석한다."}
+{"sample_id":"math_ko_0006","task_type":"math_ko","text":"귀무가설을 세운 뒤 검정통계량과 유의수준을 사용해 기각 여부를 결정한다."}
+{"sample_id":"math_en_0001","task_type":"math_en","text":"Compute the gradient of the quadratic objective and explain why the optimum is unique."}
+{"sample_id":"math_en_0002","task_type":"math_en","text":"If two vectors are orthogonal, their dot product is zero and their projection vanishes."}
+{"sample_id":"math_en_0003","task_type":"math_en","text":"The covariance matrix is positive semidefinite because every quadratic form is nonnegative."}
+{"sample_id":"math_en_0004","task_type":"math_en","text":"A Markov chain reaches stationarity when the transition no longer changes the distribution."}
+{"sample_id":"math_en_0005","task_type":"math_en","text":"The retained variance ratio equals the sum of selected eigenvalues divided by the total sum."}
+{"sample_id":"math_en_0006","task_type":"math_en","text":"A convex combination of feasible points remains feasible under linear inequality constraints."}
+{"sample_id":"code_0001","task_type":"code","text":"def route(tokens, scores, k): return scores.topk(k, dim=-1).indices"}
+{"sample_id":"code_0002","task_type":"code","text":"for step, batch in enumerate(loader): loss = model(batch); loss.backward(); optimizer.step()"}
+{"sample_id":"code_0003","task_type":"code","text":"class Expert(nn.Module): def forward(self, x): return self.net(x)"}
+{"sample_id":"code_0004","task_type":"code","text":"with torch.no_grad(): logits = router(hidden); selected = torch.topk(logits, k=4)"}
+{"sample_id":"code_0005","task_type":"code","text":"if torch.cuda.is_available(): device = torch.device('cuda')"}
+{"sample_id":"code_0006","task_type":"code","text":"metrics.append({'seed': seed, 'train_k': train_k, 'nestedness': value})"}
+{"sample_id":"reasoning_0001","task_type":"reasoning","text":"If the smoke test passes but the sanity gate fails, the correct conclusion is a measurement bug, not a model effect."}
+{"sample_id":"reasoning_0002","task_type":"reasoning","text":"A lower loss in the matched condition does not prove robustness unless mismatched conditions are also compared."}
+{"sample_id":"reasoning_0003","task_type":"reasoning","text":"If two explanations fit the data, prefer the one that survives a stricter control experiment."}
+{"sample_id":"reasoning_0004","task_type":"reasoning","text":"The same router logits imply nested top-k sets, but a full forward pass can change later hidden states."}
+{"sample_id":"reasoning_0005","task_type":"reasoning","text":"A claim should be weakened when it depends on one seed and disappears under a fair budget."}
+{"sample_id":"reasoning_0006","task_type":"reasoning","text":"The next experiment should target the strongest alternative explanation before adding complexity."}
+{"sample_id":"translation_0001","task_type":"translation","text":"Translate: 실험 결과는 유망하지만 아직 일반화되었다고 말하기는 어렵다."}
+{"sample_id":"translation_0002","task_type":"translation","text":"Translate: The routing pattern changed after training with a different top-k value."}
+{"sample_id":"translation_0003","task_type":"translation","text":"Korean to English: 서버가 끊겨도 백그라운드 작업은 계속 실행되어야 한다."}
+{"sample_id":"translation_0004","task_type":"translation","text":"English to Korean: The baseline separates a cutoff artifact from a training-time effect."}
+{"sample_id":"translation_0005","task_type":"translation","text":"Translate: 같은 초기 checkpoint에서 시작해야 expert ID 비교가 가능하다."}
+{"sample_id":"translation_0006","task_type":"translation","text":"Translate: The final report must include both successful gates and remaining limitations."}
