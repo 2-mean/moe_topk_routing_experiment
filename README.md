@@ -16,6 +16,9 @@ small enough for the Dongguk server GPU:
 For the current boundary between feasible runs and out-of-scope Qwen work, see
 `docs/feasible_experiment_scope.md`.
 
+For completed settings, gate results, metrics, and objective interpretation so
+far, see `docs/experiment_results_so_far.md`.
+
 ## Quick Start On Server
 
 ```bash
