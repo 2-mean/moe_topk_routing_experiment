@@ -13,6 +13,9 @@ small enough for the Dongguk server GPU:
 - raw outputs: `/tmp/2020110906_matryo_topk`
 - committed outputs only: compact summaries under `results/`
 
+For the current boundary between feasible runs and out-of-scope Qwen work, see
+`docs/feasible_experiment_scope.md`.
+
 ## Quick Start On Server
 
 ```bash
