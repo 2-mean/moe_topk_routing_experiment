@@ -91,7 +91,7 @@ To queue the curated nine-seed follow-up after the same-compute nine-seed run
 passes its gates:
 
 ```bash
-bash scripts/run_robust_followup_queue.sh
+bash scripts/launch_robust_followup_queue.sh
 ```
 
 ## What Gets Checked

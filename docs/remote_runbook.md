@@ -120,7 +120,7 @@ Or queue it automatically after the same-compute nine-seed full run passes its
 summary gates:
 
 ```bash
-bash scripts/run_robust_followup_queue.sh
+bash scripts/launch_robust_followup_queue.sh
 ```
 
 The larger model config is a stress test. Do not launch its full run until its
