@@ -95,7 +95,36 @@ bash scripts/launch_background.sh curated_probe_pilot full configs/curated_probe
 If a run fails, inspect the latest log reported by `check_background.sh` before
 starting another run.
 
-## 6. Copy Compact Results Into Repo
+## 6. Larger Robustness Runs
+
+The first larger run expands the same-compute pilot from three seeds to nine
+seeds while keeping model size, data, and train-k schedule unchanged:
+
+```bash
+bash scripts/launch_background.sh robust_same_compute_9seed smoke configs/robust_same_compute_9seed.json cuda
+bash scripts/check_background.sh robust_same_compute_9seed
+bash scripts/launch_background.sh robust_same_compute_9seed full configs/robust_same_compute_9seed.json cuda
+bash scripts/check_background.sh robust_same_compute_9seed
+```
+
+Run the curated nine-seed follow-up only after the same-compute nine-seed run
+has completed:
+
+```bash
+bash scripts/launch_background.sh robust_curated_probe_9seed smoke configs/robust_curated_probe_9seed.json cuda
+bash scripts/check_background.sh robust_curated_probe_9seed
+bash scripts/launch_background.sh robust_curated_probe_9seed full configs/robust_curated_probe_9seed.json cuda
+```
+
+The larger model config is a stress test. Do not launch its full run until its
+smoke run exits successfully:
+
+```bash
+bash scripts/launch_background.sh large_model_same_compute_pilot smoke configs/large_model_same_compute_pilot.json cuda
+bash scripts/check_background.sh large_model_same_compute_pilot
+```
+
+## 7. Copy Compact Results Into Repo
 
 ```bash
 LATEST=$(ls -td /tmp/2020110906_matryo_topk/runs/scratch_pilot/*_full_* | head -1)
@@ -115,4 +144,6 @@ The helper script performs the same compact copy for any named run:
 bash scripts/collect_compact_results.sh scratch_pilot results/scratch_pilot_summary full
 bash scripts/collect_compact_results.sh same_compute_pilot results/same_compute_summary full
 bash scripts/collect_compact_results.sh curated_probe_pilot results/curated_probe_summary full
+bash scripts/collect_compact_results.sh robust_same_compute_9seed results/robust_same_compute_9seed_summary full
+bash scripts/collect_compact_results.sh robust_curated_probe_9seed results/robust_curated_probe_9seed_summary full
 ```

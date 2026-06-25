@@ -66,6 +66,27 @@ bash scripts/check_background.sh curated_probe_pilot
 bash scripts/launch_background.sh curated_probe_pilot full configs/curated_probe_pilot.json cuda
 ```
 
+## Larger Runs
+
+The next robustness tier keeps the model and compute schedule fixed, but expands
+from three seeds to nine seeds:
+
+```bash
+bash scripts/launch_background.sh robust_same_compute_9seed smoke configs/robust_same_compute_9seed.json cuda
+bash scripts/check_background.sh robust_same_compute_9seed
+bash scripts/launch_background.sh robust_same_compute_9seed full configs/robust_same_compute_9seed.json cuda
+```
+
+After it completes, collect only compact artifacts:
+
+```bash
+bash scripts/collect_compact_results.sh robust_same_compute_9seed results/robust_same_compute_9seed_summary full
+```
+
+`configs/robust_curated_probe_9seed.json` repeats the nine-seed check on the
+fixed JSONL probe. `configs/large_model_same_compute_pilot.json` is a larger
+model stress test; run smoke first before committing GPU time to a full run.
+
 ## What Gets Checked
 
 - same-W0 gate: all `train_k` models for the same seed start from the same

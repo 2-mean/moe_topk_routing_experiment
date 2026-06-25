@@ -1,0 +1,44 @@
+{
+  "experiment_name": "large_model_same_compute_pilot",
+  "seeds": [0, 1, 2],
+  "train_ks": [1, 2, 4],
+  "inference_ks": [1, 2, 4],
+  "checkpoints": [0, 100, 250, 500, 750],
+  "checkpoints_by_k": {
+    "1": [0, 250, 500, 1000, 2000, 3000],
+    "2": [0, 125, 250, 500, 1000, 1500],
+    "4": [0, 50, 250, 500, 750]
+  },
+  "train_steps_by_k": {
+    "1": 3000,
+    "2": 1500,
+    "4": 750
+  },
+  "train_samples_per_category": 3000,
+  "probe_samples_per_category": 150,
+  "smoke_train_samples_per_category": 32,
+  "smoke_probe_samples_per_category": 8,
+  "seq_len": 96,
+  "vocab_size": 256,
+  "n_layers": 6,
+  "d_model": 192,
+  "n_heads": 6,
+  "n_experts": 12,
+  "expert_hidden": 768,
+  "dropout": 0.0,
+  "router_aux_loss_coef": 0.01,
+  "batch_size": 16,
+  "eval_batch_size": 32,
+  "steps": 750,
+  "smoke_steps": 10,
+  "learning_rate": 0.00025,
+  "weight_decay": 0.01,
+  "data_seed": 1729,
+  "data_order_seed": 31415,
+  "collapse_threshold": 0.9,
+  "oom_fallbacks": [
+    {"batch_size": 16, "d_model": 192},
+    {"batch_size": 8, "d_model": 192},
+    {"batch_size": 8, "d_model": 160}
+  ]
+}
