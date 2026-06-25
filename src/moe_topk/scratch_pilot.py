@@ -91,6 +91,11 @@ def checkpoints_for_train_k(
     return values
 
 
+def pair_specs(values: list[int]) -> list[tuple[int, int]]:
+    ordered = sorted({int(value) for value in values})
+    return [(small, large) for i, small in enumerate(ordered) for large in ordered[i + 1 :]]
+
+
 def evaluate_and_collect(
     model: TinyMoETransformer,
     probe: Corpus,
@@ -336,10 +341,16 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
         for row in manifest
     }
     route_cache: dict[tuple[int, int, int, int], dict[str, np.ndarray]] = {}
+    route_cache_order: list[tuple[int, int, int, int]] = []
+    max_cached_routes = int(config.get("analysis_route_cache_size", 24))
 
     def route(key: tuple[int, int, int, int]) -> dict[str, np.ndarray]:
         if key not in route_cache:
             route_cache[key] = load_route(run_dir, index[key])
+            route_cache_order.append(key)
+            while len(route_cache_order) > max_cached_routes:
+                old_key = route_cache_order.pop(0)
+                route_cache.pop(old_key, None)
         return route_cache[key]
 
     metrics_path = run_dir / "metrics.csv"
@@ -394,7 +405,9 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
                 value=row["validation_loss"],
             )
 
-        pair_specs = [(1, 2), (1, 4), (2, 4)]
+        train_pairs = pair_specs([int(value) for value in config["train_ks"]])
+        inference_pairs = pair_specs([int(value) for value in config["inference_ks"]])
+        max_inference_k = max(int(value) for value in config["inference_ks"])
         for seed in config["seeds"]:
             seed_steps = sorted(
                 {
@@ -405,11 +418,11 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
             )
             for step in seed_steps:
                 for train_k in config["train_ks"]:
-                    reference_key = (seed, train_k, max(config["inference_ks"]), step)
+                    reference_key = (seed, train_k, max_inference_k, step)
                     if reference_key not in index:
                         continue
                     reference = route(reference_key)
-                    for small, large in pair_specs:
+                    for small, large in inference_pairs:
                         small_ids = topk_ids_from_logits(reference["gate_logits"], small)
                         large_ids = topk_ids_from_logits(reference["gate_logits"], large)
                         for name, value in metric_rows_for_pair(
@@ -435,7 +448,7 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
                             )
 
                 for train_k in config["train_ks"]:
-                    for small, large in pair_specs:
+                    for small, large in inference_pairs:
                         key_a = (seed, train_k, small, step)
                         key_b = (seed, train_k, large, step)
                         if key_a not in index or key_b not in index:
@@ -463,7 +476,7 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
                                 value=value,
                             )
 
-                for small, large in pair_specs:
+                for small, large in train_pairs:
                     key_a = (seed, small, small, step)
                     key_b = (seed, large, large, step)
                     if key_a not in index or key_b not in index:
@@ -508,7 +521,7 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
 
                 if step == 0:
                     for infer_k in config["inference_ks"]:
-                        for left, right in pair_specs:
+                        for left, right in train_pairs:
                             key_a = (seed, left, infer_k, step)
                             key_b = (seed, right, infer_k, step)
                             if key_a not in index or key_b not in index:
@@ -560,7 +573,7 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
                             value=value,
                         )
 
-            for small, large in pair_specs:
+            for small, large in train_pairs:
                 step_a = final_step_by_train.get((int(seed), small))
                 step_b = final_step_by_train.get((int(seed), large))
                 if step_a is None or step_b is None:
@@ -612,13 +625,10 @@ def summarize(
     final_step: int,
 ) -> dict[str, Any]:
     rows = _read_metric_rows(metrics_path)
-    expected_runs = len(
-        {
-            (int(row["seed"]), int(row["train_k"]))
-            for row in manifest
-            if int(row["inference_k"]) == int(row["train_k"])
-        }
-    )
+    if config.get("run_mode") == "smoke":
+        expected_runs = 1
+    else:
+        expected_runs = len(config["seeds"]) * len(config["train_ks"])
     final_step_by_train: dict[tuple[int, int], int] = {}
     for row in manifest:
         seed = int(row["seed"])
@@ -655,13 +665,18 @@ def summarize(
         for row in rows
         if row["metric_type"] == "same_weight_infer_path" and row["metric_name"] == "nestedness"
     ]
-    collapse_rows = [
-        row
-        for row in manifest
-        if int(row["checkpoint_step"]) == final_step
-        and int(row["train_k"]) == int(row["inference_k"])
-        and float(row["max_expert_share"]) > float(config["collapse_threshold"])
-    ]
+    collapse_rows = []
+    for row in manifest:
+        seed = int(row["seed"])
+        train_k = int(row["train_k"])
+        infer_k = int(row["inference_k"])
+        step = int(row["checkpoint_step"])
+        if train_k != infer_k:
+            continue
+        if step != final_step_by_train.get((seed, train_k)):
+            continue
+        if float(row["max_expert_share"]) > float(config["collapse_threshold"]):
+            collapse_rows.append(row)
     final_pair_rows = [
         row
         for row in rows
@@ -691,7 +706,8 @@ def summarize(
         if metric not in {"nestedness", "top1_agreement"}:
             continue
         below = sum(1 for value in values if value < 0.95)
-        candidate_lines.append((pair, metric, below, len(values), below >= 2))
+        min_support = max(2, len(values) // 2 + 1)
+        candidate_lines.append((pair, metric, below, len(values), below >= min_support, min_support))
 
     title = str(config.get("experiment_name", "scratch_pilot")).replace("_", " ").title()
     lines = [
@@ -727,7 +743,7 @@ def summarize(
         lines.append(f"| {train_k} | {inference_k} | {mean_value:.4f} | {value_text} |")
 
     lines.extend(["", "## Candidate Direction Check", "", "| pair | metric | seeds_below_0.95 | candidate_effect |", "|---|---|---:|---|"])
-    for pair, metric, below, total, is_candidate in candidate_lines:
+    for pair, metric, below, total, is_candidate, min_support in candidate_lines:
         lines.append(f"| {pair} | {metric} | {below}/{total} | {str(is_candidate).lower()} |")
 
     lines.extend(
@@ -735,7 +751,8 @@ def summarize(
             "",
             "## Interpretation Guardrail",
             "",
-        "Use `candidate effect` only when at least two of three seeds move in the same direction.",
+        "Use `candidate effect` only when a strict seed majority moves in the same direction.",
+        f"For this run, the minimum seed support is {candidate_lines[0][5] if candidate_lines else 'NA'}.",
         "The same-weight different-infer-path row is not a sanity gate; it can fall below 1 because earlier MoE layers change hidden states when inference_k changes.",
             "If a gate fails, treat the run as an execution/measurement failure before making research claims.",
         ]
@@ -774,6 +791,44 @@ def write_plots(run_dir: Path, metrics_path: Path) -> None:
     plot_dir = run_dir / "plots"
     plot_dir.mkdir(exist_ok=True)
 
+    def parse_pair(pair: str) -> tuple[int, int]:
+        left, right = pair.split("-")
+        return int(left), int(right)
+
+    def draw_heatmap(
+        filename: str,
+        title: str,
+        matrix: np.ndarray,
+        xlabels: list[str],
+        ylabels: list[str],
+        vmin: float | None = None,
+        vmax: float | None = None,
+        cmap: str = "viridis",
+    ) -> None:
+        if matrix.size == 0:
+            return
+        height = max(4.0, min(12.0, len(ylabels) * 0.45 + 2.0))
+        width = max(5.0, min(12.0, len(xlabels) * 0.55 + 2.0))
+        masked = np.ma.masked_invalid(matrix)
+        fig, ax = plt.subplots(figsize=(width, height))
+        image = ax.imshow(masked, vmin=vmin, vmax=vmax, cmap=cmap, aspect="auto")
+        ax.set_xticks(np.arange(len(xlabels)))
+        ax.set_yticks(np.arange(len(ylabels)))
+        ax.set_xticklabels(xlabels)
+        ax.set_yticklabels(ylabels)
+        ax.tick_params(axis="x", rotation=45)
+        ax.set_title(title)
+        for y in range(matrix.shape[0]):
+            for x in range(matrix.shape[1]):
+                value = matrix[y, x]
+                if not np.isfinite(value):
+                    continue
+                ax.text(x, y, f"{value:.2f}", ha="center", va="center", fontsize=7, color="white")
+        fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
+        fig.tight_layout()
+        fig.savefig(plot_dir / filename, dpi=150)
+        plt.close(fig)
+
     for metric_name in ["nestedness", "top1_agreement", "spearman"]:
         selected = [
             row
@@ -783,19 +838,92 @@ def write_plots(run_dir: Path, metrics_path: Path) -> None:
         ]
         if not selected:
             continue
-        labels = [f"s{row['seed']} {row['pair']}" for row in selected]
-        values = [float(row["value"]) for row in selected]
-        plt.figure(figsize=(max(6, len(labels) * 0.7), 4))
+        if len(selected) > 80:
+            grouped: dict[str, list[float]] = {}
+            for row in selected:
+                grouped.setdefault(row["pair"], []).append(float(row["value"]))
+            labels = list(sorted(grouped))
+            values = [float(np.mean(grouped[label])) for label in labels]
+            title = f"Final matched mean {metric_name}"
+        else:
+            labels = [f"s{row['seed']} {row['pair']}" for row in selected]
+            values = [float(row["value"]) for row in selected]
+            title = f"Final matched {metric_name}"
+        plt.figure(figsize=(max(6, min(24, len(labels) * 0.7)), 4))
         plt.bar(labels, values)
         plt.ylim(0, 1.05)
         plt.xticks(rotation=45, ha="right")
-        plt.title(f"Final matched {metric_name}")
+        plt.title(title)
         plt.tight_layout()
         plt.savefig(plot_dir / f"final_matched_{metric_name}.png", dpi=150)
         plt.close()
 
+        ks = sorted({value for row in selected for value in parse_pair(row["pair"])})
+        if ks:
+            grouped: dict[tuple[int, int], list[float]] = {}
+            for row in selected:
+                grouped.setdefault(parse_pair(row["pair"]), []).append(float(row["value"]))
+            index_by_k = {value: idx for idx, value in enumerate(ks)}
+            matrix = np.full((len(ks), len(ks)), np.nan, dtype=np.float64)
+            for (small, large), values_for_pair in grouped.items():
+                matrix[index_by_k[small], index_by_k[large]] = float(np.mean(values_for_pair))
+            draw_heatmap(
+                filename=f"final_matched_{metric_name}_heatmap.png",
+                title=f"Final matched mean {metric_name}",
+                matrix=matrix,
+                xlabels=[str(k) for k in ks],
+                ylabels=[str(k) for k in ks],
+                vmin=-1.0 if metric_name == "spearman" else 0.0,
+                vmax=1.0,
+                cmap="magma" if metric_name == "spearman" else "viridis",
+            )
+
+    mismatch_rows = [
+        row
+        for row in rows
+        if row["metric_type"] == "mismatch_cost"
+        and row["metric_name"] == "validation_loss_delta"
+        and str(row["checkpoint_step"]).isdigit()
+    ]
+    final_step_by_train: dict[tuple[int, int], int] = {}
+    for row in mismatch_rows:
+        key = (int(row["seed"]), int(row["train_k"]))
+        final_step_by_train[key] = max(final_step_by_train.get(key, -1), int(row["checkpoint_step"]))
+    final_mismatch = [
+        row
+        for row in mismatch_rows
+        if int(row["checkpoint_step"]) == final_step_by_train.get((int(row["seed"]), int(row["train_k"])), -1)
+    ]
+    if final_mismatch:
+        train_ks = sorted({int(row["train_k"]) for row in final_mismatch})
+        inference_ks = sorted({int(row["inference_k"]) for row in final_mismatch})
+        grouped_delta: dict[tuple[int, int], list[float]] = {}
+        for row in final_mismatch:
+            grouped_delta.setdefault((int(row["train_k"]), int(row["inference_k"])), []).append(float(row["value"]))
+        y_index = {value: idx for idx, value in enumerate(train_ks)}
+        x_index = {value: idx for idx, value in enumerate(inference_ks)}
+        matrix = np.full((len(train_ks), len(inference_ks)), np.nan, dtype=np.float64)
+        for (train_k, inference_k), values_for_cell in grouped_delta.items():
+            matrix[y_index[train_k], x_index[inference_k]] = float(np.mean(values_for_cell))
+        for train_k in train_ks:
+            if train_k in x_index:
+                matrix[y_index[train_k], x_index[train_k]] = 0.0
+        max_abs = float(np.nanmax(np.abs(matrix))) if np.isfinite(matrix).any() else 1.0
+        draw_heatmap(
+            filename="final_mismatch_delta_loss_heatmap.png",
+            title="Final mean validation loss delta",
+            matrix=matrix,
+            xlabels=[str(k) for k in inference_ks],
+            ylabels=[str(k) for k in train_ks],
+            vmin=-max_abs,
+            vmax=max_abs,
+            cmap="coolwarm",
+        )
+
 
 def run_all(config: dict[str, Any], run_dir: Path, mode: str, device: torch.device) -> None:
+    config = dict(config)
+    config["run_mode"] = mode
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "routes").mkdir(exist_ok=True)
     (run_dir / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")

@@ -154,6 +154,26 @@ until a `summary.md` exists and gates have been checked.
 - No claim about downstream task quality improvement is supported by these
   routing metrics alone.
 
+## Missing Diagnostics To Add
+
+The aggregate tables above are not sufficient for the next analysis stage. The
+following diagnostics are needed before making stronger claims:
+
+- metric correlations: whether lower nestedness or lower coactivation similarity
+  coincides with larger train/inference-k mismatch loss
+- layer-wise metrics: which MoE layer contributes most to divergence between
+  train_k conditions
+- rank-position histograms: for example, where the train_k=1 selected expert
+  appears in the train_k=4 router ranking
+
+Use `scripts/analyze_routing_diagnostics.py` on a completed raw run directory to
+generate:
+
+- `metric_correlations.csv`
+- `layer_pair_metrics.csv`
+- `rank_position_histogram.csv`
+- `routing_diagnostics_summary.md`
+
 ## Current Evidence Statement
 
 Within the completed scratch MoE pilots, changing training-time top-k is
