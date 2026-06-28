@@ -119,12 +119,26 @@ within-k alignment = initialization + optimization stochasticity의 합산.
 | 4 | 0.0322 | 0.0012 | 0.4767 | **14.8×** |
 | 8 | 0.0330 | 0.0005 | 0.5004 | **15.2×** |
 
-**핵심 해석:**
+**세 수준의 비교 구조 (핵심):**
 
-1. **within-k top1 ≈ 1/32**: 같은 k로 학습해도 seed가 달라지면 top-1 expert 선택이 랜덤 수준으로 달라진다. routing path는 initialization에 고정되지 않는다.
-2. **within-k spearman ≈ 0**: 랜덤한 전문가 ranking — 두 동일-k 모델이 전문가를 완전히 다른 순서로 선호한다.
-3. **across-k는 5–16× 높음**: k 차이가 training stochasticity 자체보다 훨씬 큰 routing divergence를 만든다.
-4. **expert frequency 확인**: max_expert_share = 0.037–0.044 (랜덤 기준 1/32 = 0.031에 근접). 인기 expert 편향이 없어서 within-k가 random인 것이 확인된다.
+$$\text{random} \approx \text{within-k} \ll \text{across-k} \ll \text{oracle}$$
+
+top1 기준 실제 수치:
+
+$$0.031 \approx 0.031\text{(within-k)} \ll 0.15 \sim 0.70\text{(across-k)} \ll 1.0\text{(oracle)}$$
+
+**각 수준의 해석:**
+
+1. **within-k ≈ random (0.031)**: 같은 k, 다른 seed 모델은 expert identity alignment가 완전히 랜덤 수준. routing path는 initialization에 고정되지 않는다. within-k spearman ≈ 0 (ranking도 랜덤). 이것이 "순수 training stochasticity"의 기준선이다.
+
+2. **across-k >> random (0.15–0.70)**: 같은 seed, 다른 k 모델은 random보다 **4.8–22.2×** 높은 정렬을 보인다. 이는 동일 초기화 위에서 k가 달라도 공통 routing 구조가 **남아 있음**을 의미한다.
+
+3. **across-k << oracle (oracle gap 0.30–0.85)**: 그러나 동일 logit의 cutoff만 다를 때의 oracle(top1=1.0)에는 크게 못 미친다. 즉 k는 shared structure 위에서 routing priority를 **체계적으로 재구성**한다.
+
+4. **expert frequency 확인**: max_expert_share = 0.037–0.044 (≈ 1/32 = 0.031). expert popularity 편향이 없어서 within-k ≈ random은 편향 때문이 아님을 확인.
+
+**수정된 Claim A 표현**:
+> routing은 random도 아니고 oracle cutoff도 아니다. 같은 초기화 안에서 k가 달라도 공통 구조가 남지만(across-k >> random), training-time k는 그 공통 구조 위에서 expert priority를 체계적으로 재구성한다(across-k << oracle).
 
 ---
 
@@ -310,14 +324,15 @@ n=8이므로 인과 주장은 불가하며, 방향성만 서술 가능.
 
 | Claim | 표현 | Evidence 강도 | 핵심 수치 |
 |---|---|---|---|
-| **A** | k가 routing structure를 바꾼다 | **강함** | across-k / within-k ratio 5–16×; within-k ≈ random |
-| **B** | 차이가 cardinality만이 아니다 | **중간-강함** | nestedness_excess 0.19–0.59; HCO > 0 |
-| **C** | 인기 expert 공유 때문이 아니다 | **중간** | max_expert_share 0.037–0.044 ≈ 1/32; within-k ≈ random이 간접 증거 |
-| **D** | hi→lo가 lo→hi보다 비싸다 | **가장 강함** | 8/8 seed unanimity, two budgets 공통 |
-| **E** | gap=7에서 비대칭도 선형 외삽 초과 | **강함** | CI lo 1.14/1.42 > linear pred 0.40/0.39 |
-| **F** | 두 budget 모두에서 재현 | **강함** | 방향 동일, 크기는 budget 따라 다름 |
-| **G** | lo→hi gap=1은 safe | **중간** | SNR < 2, 부호 혼재 |
-| **H** | hi→lo gap=1은 safe하지 않음 | **강함** | SNR 3–15, 8/8 positive |
+| **A-1** | same-seed 안에서 k간 공통 routing 구조 존재 | **강함** | across-k top1: random(0.031) 대비 4.8–22.2× |
+| **A-2** | k는 routing priority를 재구성한다 (oracle 아님) | **강함** | top1 oracle gap 0.30–0.85; 단순 cutoff가 아님 |
+| **B** | 차이가 cardinality만이 아니다 | **중간-강함** | nestedness_excess 0.19–0.59 above b/32 |
+| **C** | 인기 expert 공유 때문이 아니다 | **중간** | max_expert_share 0.037–0.044 ≈ 1/32 |
+| **D** | hi→lo가 lo→hi보다 비싸다 | **가장 강함** | 8/8 seed unanimity, two budgets, 비율 5–13× |
+| **E** | gap=7 asymmetry가 선형 외삽 초과 | **강함** | CI lo 1.14/1.42 > linear 0.40/0.39 |
+| **F** | 두 budget에서 재현 | **강함** | 방향 동일; same-compute asymmetry가 더 큼 |
+| **G** | lo→hi gap=1은 noise 수준 | **중간** | SNR < 2, 부호 혼재 |
+| **H** | hi→lo gap=1도 비용 있음 | **강함** | SNR 3–15, 8/8 positive |
 
 ---
 
@@ -325,10 +340,12 @@ n=8이므로 인과 주장은 불가하며, 방향성만 서술 가능.
 
 ### 주장 가능 (현재 evidence로)
 
-- "k를 바꾸면 routing이 달라진다: training noise의 5–16배"
-- "hi→lo 추론은 gap=1에서도 비용이 있다 (8/8 seed)"
-- "gap=7 비대칭은 선형 외삽을 명확히 초과한다"
-- "lo→hi gap=1 전환은 noise 수준의 비용"
+- "같은 초기화 안에서 k가 달라도 routing 공통 구조가 남는다 (random보다 4.8–22.2×)"
+- "그러나 oracle cutoff와는 크게 다르다: routing priority가 재구성된다 (oracle gap 0.30–0.85)"
+- "hi→lo 추론은 gap=1에서도 비용이 있다 (SNR 3–15, 8/8 seed)"
+- "lo→hi gap=1 전환은 noise 수준 (SNR < 2, 부호 혼재)"
+- "gap=7 asymmetry는 선형 외삽 CI lower bound를 명확히 초과한다 (fixed 1.14 > 0.40, same-compute 1.42 > 0.39)"
+- "k=8→k=1 mismatch: 좋은 모델이 압축될 때 붕괴 (k=8 matched loss 0.384 < k=1 0.447이지만 delta +1.507)"
 - "이 패턴은 fixed-step과 same-compute 두 budget에서 일관됨"
 
 ### 금지 표현
@@ -347,14 +364,43 @@ n=8이므로 인과 주장은 불가하며, 방향성만 서술 가능.
 
 | 베이스라인 | 우선순위 | 현재 상태 | 비고 |
 |---|---|---|---|
-| B3 Frequency-empirical null | 낮음 | 간접 커버됨 | max_expert_share ≈ 1/32로 편향 없음 확인 |
+| B3 Frequency-empirical null | 낮음–중간 | 간접 커버됨 | max_expert_share ≈ 1/32로 global편향 없음 확인. task/layer별 local편향은 미확인. routing alignment를 contribution으로 쓰면 FAO 권장 |
 | B6 Step-matched within-k | same-compute 쓰면 필요 | 미구현 | k=1@step1500 vs step6000 비교 |
 | Routing-mismatch causal ablation | 낮음 (scope 외) | 미구현 | router transplant experiment 필요 |
 | HCO for across-k pairs | 낮음 | 구현됨(B5용) | nestedness_excess로 충분 |
 
 ---
 
-## 15. 실험 재현
+## 15. 핵심 수치 구조 요약
+
+### 세 수준의 routing alignment
+
+$$\underbrace{0.031}_{\text{random}=1/E} \approx \underbrace{0.031 \sim 0.033}_{\text{within-k (noise)}} \ll \underbrace{0.15 \sim 0.70}_{\text{across-k (observed)}} \ll \underbrace{1.0}_{\text{oracle}}$$
+
+이 구조가 B5의 핵심이다.
+
+### Evidence 강도 TOP 5
+
+| 순위 | Claim | 수치 |
+|---|---|---|
+| 1 | 8→1 mismatch cost | fixed +1.507, same-compute +1.613 |
+| 2 | 8→1 vs 1→8 비율 | fixed 5.0×, same-compute 13.0× |
+| 3 | gap=7 asymmetry > linear CI | fixed 1.14 > 0.40, same-compute 1.42 > 0.39 |
+| 4 | across-k top1 > random | 4.8–22.2× (pair 의존) |
+| 5 | within-k top1 ≈ random | 0.031 ≈ 1/32 = 0.0313 |
+
+### 금지 표현 요약
+
+| 위험한 표현 | 안전한 대안 |
+|---|---|
+| "k 바꾸면 routing이 random처럼 달라진다" | "같은 seed 안에서는 구조가 남는다, 단 oracle은 아니다" |
+| "k=1→k=2는 오히려 좋다" | "lo→hi gap=1은 noise 수준이라 판단 불가" |
+| "asymmetry는 초선형 법칙이다" | "gap=7에서만 CI가 linear를 초과한다" |
+| "routing divergence가 mismatch를 유발한다" | "상관 0.71–0.90이지만 n=8, 인과 미검증" |
+
+---
+
+## 16. 실험 재현
 
 ```bash
 # Fixed-step full run
