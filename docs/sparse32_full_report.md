@@ -45,8 +45,8 @@
 
 | 설정 | 이름 | k별 steps | 의도 |
 |---|---|---|---|
-| **Fixed-step** | `sparse32_kgrid_fixed_step_8seed` | 모든 k에 1500 step | step 수 통제 → k 차이만 비교 |
-| **Same-compute** | `sparse32_kgrid_same_compute_8seed` | k×step 보정 | active expert invocation 통제 |
+| **Fixed-step** | `sparse32_kgrid_fixed_step_8seed` | 모든 k에 1500 step | optimizer update 수 통제 → k 차이만 비교 |
+| **Same-compute** | `sparse32_kgrid_same_compute_8seed` | k×step 보정 | **active expert invocation proxy 통제** (optimizer update 수는 k에 따라 다름; k=1은 6000 updates, k=8은 750 updates) |
 
 Same-compute step schedule:
 
@@ -74,10 +74,13 @@ k_train ∈ {1..8}, k_infer ∈ {1..8} → 64 matched runs per budget × 8 seeds
 | 지표 | 정의 | Random baseline | Oracle |
 |---|---|---|---|
 | top1_agreement | 두 모델의 top-1 expert 일치율 | **1/32 = 0.0313** | 1.0 |
-| nestedness | small set ⊆ large set 비율 | **b/32** | 1.0 |
+| nestedness | **smaller-k expert recall within larger-k set** (per-token 평균: small k 선택 expert들이 large k 집합에 포함되는 비율) | **b/E** (uniform random 선택 시 기대값) | 1.0 |
 | spearman | gate logit ranking correlation | **0** | 1.0 |
-| mismatch_delta | loss(k_train=a, k_infer=b) − loss(k_train=a, k_infer=a) | **0** | 0 |
-| asymmetry | \|delta(hi→lo) − delta(lo→hi)\| | 0 (symmetric) | 0 |
+| mismatch_delta | loss(k_train=a, k_infer=b) − loss(k_train=a, k_infer=a) | **0** (matched inference) | 0 |
+| asymmetry | \|delta(hi→lo) − delta(lo→hi)\| | 0 (symmetric null) | 0 |
+| SNR (noise floor) | \|mean_delta\| / std_delta (seed 간 표준편차) | 2.0 (signal threshold) | — |
+
+> **nestedness 주의**: random baseline이 b/E인 것은 "각 token에서 small-k expert가 large-k set에 포함될 기대 확률"이다. 완전한 subset event(small-k 집합 전체가 large-k 집합의 부분집합)의 확률은 이와 다르다. 현재 구현은 per-token overlap recall이므로, "subset 비율"이라는 표현 대신 **"overlap recall"** 로 명시해야 한다.
 
 **Sanity gates (모든 실험에서 통과):**
 
@@ -244,6 +247,8 @@ mismatch delta는 각 모델 자신의 matched inference를 baseline (δ = 0)으
 
 asymmetry = |delta(hi→lo) − delta(lo→hi)|
 
+> **CI 계산 단위**: 각 seed에 대해 해당 gap의 모든 (a,b) pair asymmetry를 평균한 뒤, seed를 독립 단위로 95% t-CI를 산출했다. 즉 **seed-level CI**다. pair×seed를 독립 표본으로 pooling하면 pseudo-replication으로 CI가 과도하게 좁아지므로 사용하지 않았다.
+
 ### Fixed-step 8-seed
 
 | gap | asymm_mean | 95% CI lo | 95% CI hi | linear_pred | ratio | CI > linear? |
@@ -275,6 +280,8 @@ asymmetry = |delta(hi→lo) − delta(lo→hi)|
 ## 10. Noise Floor: Adjacent-k (gap=1) 분리
 
 같은 gap=1이라도 방향에 따라 signal 강도가 전혀 다르다.
+
+> **SNR 정의**: SNR = |mean_delta| / std_delta, 여기서 mean과 std는 8 seeds 기준. "STRONG" 판정 기준: SNR ≥ 2.0 이며 8 seeds 모두 같은 부호.
 
 ### Fixed-step 8-seed, gap=1
 
@@ -360,6 +367,8 @@ n=8이므로 인과 주장은 불가하며, 방향성만 서술 가능.
 | "routing divergence가 mismatch cost를 유발한다" | 상관 0.71–0.90이지만 n=8, 인과 ablation 없음 |
 | "이 결과를 pretrained MoE에 일반화할 수 있다" | 합성 소규모 모델, 별도 검증 필요 |
 | "same-compute에서 k=1이 특별히 좋다" | step 효과(6000 steps)와 k 효과 미분리 |
+| "same-compute는 total compute를 완전히 통제했다" | active expert invocation만 통제. optimizer update 수는 k=1이 8배 더 많다 |
+| "nestedness가 높으면 두 모델의 expert 집합이 유사하다" | nestedness는 asymmetric per-token recall. k=1-8 pair는 random baseline만으로도 b/E=0.25 |
 
 ---
 
@@ -367,10 +376,51 @@ n=8이므로 인과 주장은 불가하며, 방향성만 서술 가능.
 
 | 베이스라인 | 우선순위 | 현재 상태 | 비고 |
 |---|---|---|---|
-| B3 Frequency-empirical null | 낮음–중간 | 간접 커버됨 | max_expert_share ≈ 1/32로 global편향 없음 확인. task/layer별 local편향은 미확인. routing alignment를 contribution으로 쓰면 FAO 권장 |
-| B6 Step-matched within-k | same-compute 쓰면 필요 | 미구현 | k=1@step1500 vs step6000 비교 |
-| Routing-mismatch causal ablation | 낮음 (scope 외) | 미구현 | router transplant experiment 필요 |
-| HCO for across-k pairs | 낮음 | 구현됨(B5용) | nestedness_excess로 충분 |
+| B3 Frequency-empirical null | 낮음–중간 | 간접 커버됨 | max_expert_share ≈ 1/32로 global편향 없음. task/layer별 local편향 미확인. routing alignment를 contribution으로 쓰면 FAO 권장 |
+| B6 Step-matched within-k | same-compute 쓰면 필요 | 미구현 | k=1@step1500 vs step6000 비교로 step 효과 분리 |
+| Routing-mismatch causal ablation | 중간 | 미구현 | router transplant, router freeze, expert freeze 등 |
+| HCO for across-k pairs | 낮음 | 구현됨(B5용) | nestedness_excess로 대체 가능 |
+
+---
+
+## 논문화 전 반드시 보강할 것 (우선순위)
+
+### 1순위: Inference top-k 구현 명시
+
+> k_infer를 바꿀 때 router probability를 재정규화하는가? top-k 외 expert는 drop인가? sparse_dispatch에서 k 변경이 expert output scaling에 어떤 영향을 주는가?
+
+이를 명시하지 않으면 "hi→lo loss 악화가 단순 output mass 감소 때문 아닌가?"라는 반박을 받는다.
+
+### 2순위: nestedness 용어 수정
+
+"subset 비율" → **"smaller-k expert overlap recall within larger-k set"**. 논문에서 mixed terminology 사용 시 통계 공격 받음.
+
+### 3순위: CI 단위 명시 (본문에 한 줄)
+
+> "95% CI는 seed를 독립 단위로 계산했으며, 각 seed에서 해당 gap의 모든 pair를 먼저 평균했다."
+
+### 4순위: 8×8 heatmap 제공
+
+mismatch delta, asymmetry, top1 agreement, nestedness, Spearman의 full 8×8 matrix. Key pair 발췌만으로는 논문급 증거 불충분.
+
+### 5순위: Causal ablation (최소 1개)
+
+현재: "routing이 달라지고 loss도 나빠진다" (correlation).  
+필요: "routing 변화가 loss 악화의 원인이다" (causation).  
+최소 ablation: trained k=8 모델에서 inference시 oracle cutoff k=1(same logit, no learning) vs trained k=1 router 비교.
+
+---
+
+## 현재 가장 강한 단일 claim
+
+> Train-time top-k와 inference-time top-k의 불일치, 특히 **high-k로 학습한 모델을 low-k로 추론하는 hi→lo 전환**은 validation loss를 크게 악화시킨다 (fixed-step: +1.507, same-compute: +1.613 at k=8→1). 이 비대칭성은 k=8이 matched inference에서 낮은 loss를 보임에도 불구하고 나타나며(k=8 matched: 0.384 < k=1 matched: 0.447), two-budget 설정 모두에서 재현된다.
+
+이것이 현재 evidence에서 가장 설득력 있는 단일 문장이다.
+
+**현재 증거로 불가능한 claim**:
+- "이 현상이 일반 pretrained MoE에서도 동일하게 나타난다"
+- "routing divergence가 mismatch loss의 원인이다"  
+- "asymmetry가 특정 수학적 함수형을 따른다"
 
 ---
 
