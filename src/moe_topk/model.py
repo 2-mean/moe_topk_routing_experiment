@@ -17,6 +17,7 @@ class ModelConfig:
     n_experts: int
     expert_hidden: int
     dropout: float = 0.0
+    sparse_dispatch: bool = True
 
 
 class Expert(nn.Module):
@@ -34,13 +35,54 @@ class Expert(nn.Module):
 
 
 class TopKMoE(nn.Module):
-    def __init__(self, d_model: int, n_experts: int, expert_hidden: int, dropout: float) -> None:
+    def __init__(
+        self,
+        d_model: int,
+        n_experts: int,
+        expert_hidden: int,
+        dropout: float,
+        sparse_dispatch: bool = True,
+    ) -> None:
         super().__init__()
         self.n_experts = n_experts
+        self.sparse_dispatch = sparse_dispatch
         self.router = nn.Linear(d_model, n_experts, bias=False)
         self.experts = nn.ModuleList(
             [Expert(d_model, expert_hidden, dropout) for _ in range(n_experts)]
         )
+
+    def _dense_mix(
+        self,
+        x: torch.Tensor,
+        top_ids: torch.Tensor,
+        top_weights: torch.Tensor,
+    ) -> torch.Tensor:
+        expert_outputs = torch.stack([expert(x) for expert in self.experts], dim=2)
+        gather_index = top_ids.unsqueeze(-1).expand(*top_ids.shape, x.shape[-1])
+        selected_outputs = torch.gather(expert_outputs, dim=2, index=gather_index)
+        return (selected_outputs * top_weights.unsqueeze(-1)).sum(dim=2)
+
+    def _sparse_mix(
+        self,
+        x: torch.Tensor,
+        top_ids: torch.Tensor,
+        top_weights: torch.Tensor,
+    ) -> torch.Tensor:
+        batch_size, seq_len, d_model = x.shape
+        flat_x = x.reshape(batch_size * seq_len, d_model)
+        flat_ids = top_ids.reshape(batch_size * seq_len, -1)
+        flat_weights = top_weights.reshape(batch_size * seq_len, -1)
+        mixed = flat_x.new_zeros(flat_x.shape)
+
+        for expert_id, expert in enumerate(self.experts):
+            token_indices, slot_indices = torch.where(flat_ids == expert_id)
+            if token_indices.numel() == 0:
+                continue
+            expert_out = expert(flat_x[token_indices])
+            weighted = expert_out * flat_weights[token_indices, slot_indices].unsqueeze(-1)
+            mixed.index_add_(0, token_indices, weighted)
+
+        return mixed.reshape(batch_size, seq_len, d_model)
 
     def forward(
         self,
@@ -56,10 +98,10 @@ class TopKMoE(nn.Module):
         top_logits, top_ids = torch.topk(gate_logits, k=top_k, dim=-1)
         top_weights = F.softmax(top_logits, dim=-1)
 
-        expert_outputs = torch.stack([expert(x) for expert in self.experts], dim=2)
-        gather_index = top_ids.unsqueeze(-1).expand(*top_ids.shape, x.shape[-1])
-        selected_outputs = torch.gather(expert_outputs, dim=2, index=gather_index)
-        mixed = (selected_outputs * top_weights.unsqueeze(-1)).sum(dim=2)
+        if self.sparse_dispatch:
+            mixed = self._sparse_mix(x, top_ids, top_weights)
+        else:
+            mixed = self._dense_mix(x, top_ids, top_weights)
 
         mean_probs = gate_probs.mean(dim=(0, 1))
         aux_loss = ((mean_probs - (1.0 / self.n_experts)) ** 2).sum() * self.n_experts
@@ -91,6 +133,7 @@ class Block(nn.Module):
             config.n_experts,
             config.expert_hidden,
             config.dropout,
+            sparse_dispatch=config.sparse_dispatch,
         )
 
     def forward(
@@ -152,4 +195,3 @@ class TinyMoETransformer(nn.Module):
         logits = self.lm_head(self.ln_f(x))
         aux = torch.stack(aux_losses).mean()
         return logits, aux, routes
-

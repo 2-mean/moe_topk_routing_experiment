@@ -19,8 +19,25 @@ mkdir -p "$RESULT_DIR/plots"
 cp "$LATEST/summary.md" "$RESULT_DIR/summary.md"
 cp "$LATEST/metrics.csv" "$RESULT_DIR/metrics.csv"
 cp "$LATEST/env.txt" "$RESULT_DIR/env.txt"
+cp "$LATEST/task_metrics.csv" "$RESULT_DIR/task_metrics.csv" 2>/dev/null || true
+cp "$LATEST/checkpoint_manifest.csv" "$RESULT_DIR/checkpoint_manifest.csv" 2>/dev/null || true
 cp "$LATEST"/plots/*.png "$RESULT_DIR/plots/" 2>/dev/null || true
+if [ -d "$LATEST/diagnostics" ]; then
+  mkdir -p "$RESULT_DIR/diagnostics"
+  cp "$LATEST"/diagnostics/*.csv "$RESULT_DIR/diagnostics/" 2>/dev/null || true
+  cp "$LATEST"/diagnostics/*.md "$RESULT_DIR/diagnostics/" 2>/dev/null || true
+fi
+for diagnostic_name in task_specialization task_loss_grid router_representation full_ranking; do
+  if [ -d "$LATEST/diagnostics/$diagnostic_name" ]; then
+    mkdir -p "$RESULT_DIR/diagnostics/$diagnostic_name/plots"
+    if [ "$diagnostic_name" = "full_ranking" ]; then
+      rm -f "$RESULT_DIR/diagnostics/$diagnostic_name/plots/empirical_adjusted_overlap_pair_layer_heatmap.png"
+    fi
+    cp "$LATEST"/diagnostics/"$diagnostic_name"/*.csv "$RESULT_DIR/diagnostics/$diagnostic_name/" 2>/dev/null || true
+    cp "$LATEST"/diagnostics/"$diagnostic_name"/*.md "$RESULT_DIR/diagnostics/$diagnostic_name/" 2>/dev/null || true
+    cp "$LATEST"/diagnostics/"$diagnostic_name"/plots/*.png "$RESULT_DIR/diagnostics/$diagnostic_name/plots/" 2>/dev/null || true
+  fi
+done
 echo "$LATEST" > "$RESULT_DIR/raw_run_path.txt"
 
 echo "copied compact results from $LATEST to $RESULT_DIR"
-

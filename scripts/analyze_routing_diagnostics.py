@@ -3,13 +3,13 @@ from __future__ import annotations
 import argparse
 import csv
 import math
-from collections import Counter, defaultdict
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from moe_topk.metrics import metric_rows_for_pair
+from moe_topk.metrics import coactivation_matrix, metric_rows_for_pair
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -180,11 +180,20 @@ def analyze_layers(
     pairs = [(a, b) for i, a in enumerate(train_ks) for b in train_ks[i + 1 :]]
     rows: list[dict[str, Any]] = []
     cache: dict[tuple[int, int, int, int], dict[str, np.ndarray]] = {}
+    coactivation_cache: dict[tuple[tuple[int, int, int, int], int], np.ndarray] = {}
 
     def route(key: tuple[int, int, int, int]) -> dict[str, np.ndarray]:
         if key not in cache:
             cache[key] = load_route(run_dir, index[key])
         return cache[key]
+
+    def layer_coactivation(key: tuple[int, int, int, int], layer_id: int) -> np.ndarray:
+        cache_key = (key, layer_id)
+        if cache_key not in coactivation_cache:
+            data = route(key)
+            mask = data["layer_id"] == layer_id
+            coactivation_cache[cache_key] = coactivation_matrix(data["selected_ids"][mask], n_experts)
+        return coactivation_cache[cache_key]
 
     for seed in sorted({int(row["seed"]) for row in manifest}):
         for small, large in pairs:
@@ -208,6 +217,8 @@ def analyze_layers(
                     a["gate_logits"][mask_a],
                     b["gate_logits"][mask_b],
                     n_experts,
+                    coactivation_a=layer_coactivation(key_a, int(layer_id)) if small >= 2 else None,
+                    coactivation_b=layer_coactivation(key_b, int(layer_id)) if large >= 2 else None,
                 ):
                     rows.append(
                         {
@@ -233,11 +244,31 @@ def analyze_rank_histograms(
     pairs = [(a, b) for i, a in enumerate(train_ks) for b in train_ks[i + 1 :]]
     rows: list[dict[str, Any]] = []
     cache: dict[tuple[int, int, int, int], dict[str, np.ndarray]] = {}
+    inverse_rank_cache: dict[tuple[tuple[int, int, int, int], int], np.ndarray] = {}
+    inverse_rank_order: list[tuple[tuple[int, int, int, int], int]] = []
+    max_inverse_rank_cache = 16
 
     def route(key: tuple[int, int, int, int]) -> dict[str, np.ndarray]:
         if key not in cache:
             cache[key] = load_route(run_dir, index[key])
         return cache[key]
+
+    def inverse_ranks_for(key: tuple[int, int, int, int], layer_id: int) -> np.ndarray:
+        cache_key = (key, layer_id)
+        if cache_key not in inverse_rank_cache:
+            data = route(key)
+            mask = data["layer_id"] == layer_id
+            logits = data["gate_logits"][mask]
+            rank_order = np.argsort(-logits.astype(np.float32), axis=1)
+            inverse_ranks = np.empty(rank_order.shape, dtype=np.int16)
+            record_ids = np.arange(rank_order.shape[0])[:, None]
+            inverse_ranks[record_ids, rank_order] = np.arange(1, rank_order.shape[1] + 1, dtype=np.int16)
+            inverse_rank_cache[cache_key] = inverse_ranks
+            inverse_rank_order.append(cache_key)
+            while len(inverse_rank_order) > max_inverse_rank_cache:
+                old_key = inverse_rank_order.pop(0)
+                inverse_rank_cache.pop(old_key, None)
+        return inverse_rank_cache[cache_key]
 
     for seed in sorted({int(row["seed"]) for row in manifest}):
         for small, large in pairs:
@@ -253,18 +284,13 @@ def analyze_rank_histograms(
             b = route(key_b)
             for layer_id in sorted(set(a["layer_id"].tolist()) & set(b["layer_id"].tolist())):
                 mask_a = a["layer_id"] == layer_id
-                mask_b = b["layer_id"] == layer_id
                 selected = a["selected_ids"][mask_a]
-                logits = b["gate_logits"][mask_b]
-                rank_order = np.argsort(-logits.astype(np.float32), axis=1)
-                inverse_ranks = np.empty_like(rank_order)
-                record_ids = np.arange(rank_order.shape[0])[:, None]
-                inverse_ranks[record_ids, rank_order] = np.arange(1, rank_order.shape[1] + 1)
+                inverse_ranks = inverse_ranks_for(key_b, int(layer_id))
                 ranks = inverse_ranks[np.arange(selected.shape[0]), selected[:, 0]]
-                counts = Counter(int(rank) for rank in ranks)
+                counts = np.bincount(ranks.astype(np.int16), minlength=inverse_ranks.shape[1] + 1)
                 total = int(ranks.size)
-                for rank in range(1, rank_order.shape[1] + 1):
-                    count = counts.get(rank, 0)
+                for rank in range(1, inverse_ranks.shape[1] + 1):
+                    count = int(counts[rank])
                     rows.append(
                         {
                             "seed": seed,

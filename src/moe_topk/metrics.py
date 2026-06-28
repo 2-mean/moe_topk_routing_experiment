@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import math
-from collections import Counter
-from typing import Iterable
 
 import numpy as np
 
@@ -14,12 +12,11 @@ def top1_agreement(selected_a: np.ndarray, selected_b: np.ndarray) -> float:
 def nestedness(selected_small: np.ndarray, selected_large: np.ndarray) -> float:
     if selected_small.shape[0] != selected_large.shape[0]:
         raise ValueError("route arrays must have the same number of records")
-    scores = []
-    for small, large in zip(selected_small, selected_large):
-        small_set = set(int(x) for x in small)
-        large_set = set(int(x) for x in large)
-        scores.append(len(small_set.intersection(large_set)) / max(1, len(small_set)))
-    return float(np.mean(scores))
+    if selected_small.shape[1] == 0:
+        return float("nan")
+    matches = selected_small[:, :, None] == selected_large[:, None, :]
+    per_record = np.any(matches, axis=2).sum(axis=1) / selected_small.shape[1]
+    return float(np.mean(per_record))
 
 
 def _ranks_desc(values: np.ndarray) -> np.ndarray:
@@ -47,7 +44,8 @@ def expert_frequency(selected_ids: np.ndarray, n_experts: int) -> dict[str, floa
     counts = np.bincount(selected_ids.reshape(-1), minlength=n_experts).astype(np.float64)
     total = max(1.0, float(counts.sum()))
     probs = counts / total
-    entropy = -float(np.sum([p * math.log(p + 1e-12) for p in probs]))
+    nonzero = probs[probs > 0]
+    entropy = -float(np.sum(nonzero * np.log(nonzero)))
     return {
         "max_share": float(probs.max()),
         "entropy": entropy,
@@ -62,12 +60,18 @@ def topk_ids_from_logits(logits: np.ndarray, top_k: int) -> np.ndarray:
 
 def coactivation_matrix(selected_ids: np.ndarray, n_experts: int) -> np.ndarray:
     matrix = np.zeros((n_experts, n_experts), dtype=np.float64)
-    for row in selected_ids:
-        unique = sorted(set(int(x) for x in row))
-        for i, left in enumerate(unique):
-            for right in unique[i + 1 :]:
-                matrix[left, right] += 1.0
-                matrix[right, left] += 1.0
+    if selected_ids.shape[1] < 2:
+        return matrix
+    selected = selected_ids.astype(np.intp, copy=False)
+    for left_pos in range(selected.shape[1] - 1):
+        left = selected[:, left_pos]
+        for right_pos in range(left_pos + 1, selected.shape[1]):
+            right = selected[:, right_pos]
+            valid = left != right
+            if not np.any(valid):
+                continue
+            np.add.at(matrix, (left[valid], right[valid]), 1.0)
+            np.add.at(matrix, (right[valid], left[valid]), 1.0)
     total = matrix.sum()
     if total > 0:
         matrix /= total
@@ -106,15 +110,18 @@ def metric_rows_for_pair(
     logits_a: np.ndarray,
     logits_b: np.ndarray,
     n_experts: int,
+    include_coactivation: bool = True,
+    coactivation_a: np.ndarray | None = None,
+    coactivation_b: np.ndarray | None = None,
 ) -> list[tuple[str, float]]:
     rows = [
         ("top1_agreement", top1_agreement(selected_a, selected_b)),
         ("nestedness", nestedness(selected_a, selected_b)),
         ("spearman", spearman_from_logits(logits_a, logits_b)),
     ]
-    if selected_a.shape[1] >= 2 and selected_b.shape[1] >= 2:
-        matrix_a = coactivation_matrix(selected_a, n_experts)
-        matrix_b = coactivation_matrix(selected_b, n_experts)
+    if include_coactivation and selected_a.shape[1] >= 2 and selected_b.shape[1] >= 2:
+        matrix_a = coactivation_a if coactivation_a is not None else coactivation_matrix(selected_a, n_experts)
+        matrix_b = coactivation_b if coactivation_b is not None else coactivation_matrix(selected_b, n_experts)
         rows.append(("coactivation_cosine", cosine_similarity(matrix_a, matrix_b)))
         rows.append(("top_pair_overlap", top_pair_overlap(matrix_a, matrix_b)))
     return rows

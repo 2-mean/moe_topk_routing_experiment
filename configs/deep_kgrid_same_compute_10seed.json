@@ -36,7 +36,7 @@
   "data_seed": 1729,
   "data_order_seed": 31415,
   "collapse_threshold": 0.9,
-  "analysis_route_cache_size": 16,
+  "analysis_route_cache_size": 96,
   "oom_fallbacks": [
     {"batch_size": 16, "d_model": 160, "n_heads": 5, "expert_hidden": 640},
     {"batch_size": 8, "d_model": 160, "n_heads": 5, "expert_hidden": 640},

@@ -15,7 +15,7 @@ import torch
 from torch.nn import functional as F
 
 from moe_topk.data import CATEGORIES, Corpus, batch_indices, build_corpus, build_jsonl_corpus
-from moe_topk.metrics import expert_frequency, metric_rows_for_pair, topk_ids_from_logits
+from moe_topk.metrics import coactivation_matrix, expert_frequency, metric_rows_for_pair
 from moe_topk.model import ModelConfig, TinyMoETransformer
 
 
@@ -54,6 +54,7 @@ def model_config_from_dict(config: dict[str, Any]) -> ModelConfig:
         n_experts=int(config["n_experts"]),
         expert_hidden=int(config["expert_hidden"]),
         dropout=float(config["dropout"]),
+        sparse_dispatch=bool(config.get("sparse_dispatch", True)),
     )
 
 
@@ -64,6 +65,25 @@ def make_model(config: dict[str, Any], device: torch.device) -> TinyMoETransform
 
 def ce_loss(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     return F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
+
+
+def task_loss_rows(
+    loss_sums: dict[str, float],
+    token_counts: dict[str, int],
+    task_to_id: dict[str, int],
+) -> list[dict[str, Any]]:
+    rows = []
+    for task_name, task_id in sorted(task_to_id.items(), key=lambda item: item[1]):
+        count = int(token_counts.get(task_name, 0))
+        rows.append(
+            {
+                "task_id": task_id,
+                "task_name": task_name,
+                "num_tokens": count,
+                "validation_loss": float(loss_sums.get(task_name, 0.0)) / max(1, count),
+            }
+        )
+    return rows
 
 
 def route_filename(seed: int, train_k: int, infer_k: int, step: int) -> str:
@@ -112,6 +132,8 @@ def evaluate_and_collect(
     eval_batch_size = int(config["eval_batch_size"])
     total_loss = 0.0
     total_tokens = 0
+    task_loss_sums = {task: 0.0 for task in task_to_id}
+    task_token_counts = {task: 0 for task in task_to_id}
     arrays: dict[str, list[np.ndarray]] = {
         "sample_index": [],
         "task_id": [],
@@ -129,9 +151,17 @@ def evaluate_and_collect(
             inputs = batch[:, :-1]
             targets = batch[:, 1:]
             logits, aux_loss, routes = model(inputs, top_k=infer_k, collect_routes=True)
-            loss = ce_loss(logits, targets)
-            total_loss += float(loss.detach().cpu()) * targets.numel()
+            token_losses = F.cross_entropy(
+                logits.reshape(-1, logits.size(-1)),
+                targets.reshape(-1),
+                reduction="none",
+            ).reshape_as(targets)
+            total_loss += float(token_losses.detach().sum().cpu())
             total_tokens += int(targets.numel())
+            detached_losses = token_losses.detach().cpu()
+            for local_index, task_name in enumerate(probe.task_types[start:end]):
+                task_loss_sums[task_name] += float(detached_losses[local_index].sum())
+                task_token_counts[task_name] += int(detached_losses[local_index].numel())
 
             batch_size, seq_len = inputs.shape
             sample_index = np.repeat(np.arange(start, end, dtype=np.int32), seq_len)
@@ -177,10 +207,28 @@ def evaluate_and_collect(
         "max_expert_share": freq["max_share"],
         "expert_entropy": freq["entropy"],
         "expert_normalized_entropy": freq["normalized_entropy"],
+        "_task_metrics": task_loss_rows(task_loss_sums, task_token_counts, task_to_id),
     }
 
 
 def append_manifest(run_dir: Path, rows: list[dict[str, Any]]) -> None:
+    manifest_rows: list[dict[str, Any]] = []
+    task_rows: list[dict[str, Any]] = []
+    for raw_row in rows:
+        row = dict(raw_row)
+        per_task = row.pop("_task_metrics", [])
+        manifest_rows.append(row)
+        for task_row in per_task:
+            task_rows.append(
+                {
+                    "seed": row["seed"],
+                    "train_k": row["train_k"],
+                    "inference_k": row["inference_k"],
+                    "checkpoint_step": row["checkpoint_step"],
+                    **task_row,
+                }
+            )
+
     path = run_dir / "manifest.csv"
     exists = path.exists()
     fieldnames = [
@@ -199,7 +247,142 @@ def append_manifest(run_dir: Path, rows: list[dict[str, Any]]) -> None:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         if not exists:
             writer.writeheader()
+        writer.writerows(manifest_rows)
+
+    task_path = run_dir / "task_metrics.csv"
+    task_exists = task_path.exists()
+    task_fieldnames = [
+        "seed",
+        "train_k",
+        "inference_k",
+        "checkpoint_step",
+        "task_id",
+        "task_name",
+        "num_tokens",
+        "validation_loss",
+    ]
+    with task_path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=task_fieldnames)
+        if not task_exists:
+            writer.writeheader()
+        writer.writerows(task_rows)
+
+
+def checkpoint_state_dict(
+    model: TinyMoETransformer,
+    floating_dtype: torch.dtype,
+    router_only: bool = False,
+) -> dict[str, torch.Tensor]:
+    state: dict[str, torch.Tensor] = {}
+    for key, value in model.state_dict().items():
+        if router_only and ".moe.router." not in f".{key}":
+            continue
+        tensor = value.detach().cpu()
+        if tensor.is_floating_point():
+            tensor = tensor.to(dtype=floating_dtype)
+        state[key] = tensor.clone()
+    return state
+
+
+def append_checkpoint_manifest(run_dir: Path, rows: list[dict[str, Any]]) -> None:
+    path = run_dir / "checkpoint_manifest.csv"
+    exists = path.exists()
+    fieldnames = [
+        "seed",
+        "train_k",
+        "step",
+        "checkpoint_type",
+        "floating_dtype",
+        "state_tensors",
+        "bytes",
+        "path",
+    ]
+    with path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        if not exists:
+            writer.writeheader()
         writer.writerows(rows)
+
+
+def save_final_checkpoints(
+    model: TinyMoETransformer,
+    config: dict[str, Any],
+    run_dir: Path,
+    seed: int,
+    train_k: int,
+    step: int,
+) -> None:
+    if config.get("run_mode") != "full" and not bool(config.get("save_smoke_checkpoints", False)):
+        return
+    selected_ks = {int(value) for value in config.get("final_checkpoint_ks", config["train_ks"])}
+    if train_k not in selected_ks:
+        return
+
+    checkpoint_dir = run_dir / "checkpoints"
+    checkpoint_dir.mkdir(exist_ok=True)
+    rows: list[dict[str, Any]] = []
+
+    if bool(config.get("save_final_checkpoints", False)):
+        dtype_name = str(config.get("final_checkpoint_dtype", "float16"))
+        dtype_by_name = {"float16": torch.float16, "float32": torch.float32, "bfloat16": torch.bfloat16}
+        if dtype_name not in dtype_by_name:
+            raise ValueError(f"unsupported final_checkpoint_dtype: {dtype_name}")
+        state = checkpoint_state_dict(model, dtype_by_name[dtype_name])
+        checkpoint_path = checkpoint_dir / f"final_seed{seed}_train{train_k}_step{step}_{dtype_name}.pt"
+        torch.save(
+            {
+                "format_version": 1,
+                "seed": seed,
+                "train_k": train_k,
+                "step": step,
+                "model_config": model_config_from_dict(config).__dict__,
+                "state_dict": state,
+            },
+            checkpoint_path,
+        )
+        rows.append(
+            {
+                "seed": seed,
+                "train_k": train_k,
+                "step": step,
+                "checkpoint_type": "full_model",
+                "floating_dtype": dtype_name,
+                "state_tensors": len(state),
+                "bytes": checkpoint_path.stat().st_size,
+                "path": checkpoint_path.relative_to(run_dir).as_posix(),
+            }
+        )
+        del state
+
+    if bool(config.get("save_router_checkpoints", False)):
+        state = checkpoint_state_dict(model, torch.float32, router_only=True)
+        checkpoint_path = checkpoint_dir / f"router_seed{seed}_train{train_k}_step{step}_float32.pt"
+        torch.save(
+            {
+                "format_version": 1,
+                "seed": seed,
+                "train_k": train_k,
+                "step": step,
+                "model_config": model_config_from_dict(config).__dict__,
+                "state_dict": state,
+            },
+            checkpoint_path,
+        )
+        rows.append(
+            {
+                "seed": seed,
+                "train_k": train_k,
+                "step": step,
+                "checkpoint_type": "router_only",
+                "floating_dtype": "float32",
+                "state_tensors": len(state),
+                "bytes": checkpoint_path.stat().st_size,
+                "path": checkpoint_path.relative_to(run_dir).as_posix(),
+            }
+        )
+
+    if rows:
+        append_checkpoint_manifest(run_dir, rows)
 
 
 def train_one(
@@ -295,6 +478,14 @@ def train_one(
                 append_manifest(run_dir, manifest_rows)
                 manifest_rows.clear()
 
+    save_final_checkpoints(
+        model=model,
+        config=config,
+        run_dir=run_dir,
+        seed=seed,
+        train_k=train_k,
+        step=steps,
+    )
     return manifest_rows
 
 
@@ -342,7 +533,8 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
     }
     route_cache: dict[tuple[int, int, int, int], dict[str, np.ndarray]] = {}
     route_cache_order: list[tuple[int, int, int, int]] = []
-    max_cached_routes = int(config.get("analysis_route_cache_size", 24))
+    route_coactivation_cache: dict[tuple[int, int, int, int], np.ndarray] = {}
+    max_cached_routes = int(config.get("analysis_route_cache_size", 96))
 
     def route(key: tuple[int, int, int, int]) -> dict[str, np.ndarray]:
         if key not in route_cache:
@@ -352,6 +544,11 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
                 old_key = route_cache_order.pop(0)
                 route_cache.pop(old_key, None)
         return route_cache[key]
+
+    def route_coactivation(key: tuple[int, int, int, int]) -> np.ndarray:
+        if key not in route_coactivation_cache:
+            route_coactivation_cache[key] = coactivation_matrix(route(key)["selected_ids"], int(config["n_experts"]))
+        return route_coactivation_cache[key]
 
     metrics_path = run_dir / "metrics.csv"
     fieldnames = [
@@ -422,9 +619,20 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
                     if reference_key not in index:
                         continue
                     reference = route(reference_key)
+                    reference_order = np.argsort(-reference["gate_logits"].astype(np.float32), axis=1).astype(np.int16)
+                    reference_coactivation_cache: dict[int, np.ndarray] = {}
+
+                    def reference_coactivation(top_k: int) -> np.ndarray:
+                        if top_k not in reference_coactivation_cache:
+                            reference_coactivation_cache[top_k] = coactivation_matrix(
+                                reference_order[:, :top_k],
+                                int(config["n_experts"]),
+                            )
+                        return reference_coactivation_cache[top_k]
+
                     for small, large in inference_pairs:
-                        small_ids = topk_ids_from_logits(reference["gate_logits"], small)
-                        large_ids = topk_ids_from_logits(reference["gate_logits"], large)
+                        small_ids = reference_order[:, :small]
+                        large_ids = reference_order[:, :large]
                         for name, value in metric_rows_for_pair(
                             "logit_cutoff_sanity",
                             small_ids,
@@ -432,6 +640,8 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
                             reference["gate_logits"],
                             reference["gate_logits"],
                             int(config["n_experts"]),
+                            coactivation_a=reference_coactivation(small) if small >= 2 else None,
+                            coactivation_b=reference_coactivation(large) if large >= 2 else None,
                         ):
                             write_metric_row(
                                 writer,
@@ -462,6 +672,8 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
                             a["gate_logits"],
                             b["gate_logits"],
                             int(config["n_experts"]),
+                            coactivation_a=route_coactivation(key_a) if small >= 2 else None,
+                            coactivation_b=route_coactivation(key_b) if large >= 2 else None,
                         ):
                             write_metric_row(
                                 writer,
@@ -490,6 +702,8 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
                         a["gate_logits"],
                         b["gate_logits"],
                         int(config["n_experts"]),
+                        coactivation_a=route_coactivation(key_a) if small >= 2 else None,
+                        coactivation_b=route_coactivation(key_b) if large >= 2 else None,
                     ):
                         write_metric_row(
                             writer,
@@ -535,6 +749,8 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
                                 a["gate_logits"],
                                 b["gate_logits"],
                                 int(config["n_experts"]),
+                                coactivation_a=route_coactivation(key_a) if infer_k >= 2 else None,
+                                coactivation_b=route_coactivation(key_b) if infer_k >= 2 else None,
                             ):
                                 write_metric_row(
                                     writer,
@@ -591,6 +807,8 @@ def analyze(run_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
                     a["gate_logits"],
                     b["gate_logits"],
                     int(config["n_experts"]),
+                    coactivation_a=route_coactivation(key_a) if small >= 2 else None,
+                    coactivation_b=route_coactivation(key_b) if large >= 2 else None,
                 ):
                     write_metric_row(
                         writer,

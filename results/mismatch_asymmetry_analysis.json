@@ -1,0 +1,362 @@
+{
+  "fixed_3seed": {
+    "asymmetry_by_gap": {
+      "1": {
+        "mean_lohi_delta": -0.00477,
+        "mean_hilo_delta": 0.05057,
+        "mean_asymmetry": 0.05534,
+        "n_pairs": 7
+      },
+      "2": {
+        "mean_lohi_delta": 0.00888,
+        "mean_hilo_delta": 0.1271,
+        "mean_asymmetry": 0.11822,
+        "n_pairs": 6
+      },
+      "3": {
+        "mean_lohi_delta": 0.03546,
+        "mean_hilo_delta": 0.2459,
+        "mean_asymmetry": 0.21044,
+        "n_pairs": 5
+      },
+      "4": {
+        "mean_lohi_delta": 0.07967,
+        "mean_hilo_delta": 0.36965,
+        "mean_asymmetry": 0.28997,
+        "n_pairs": 4
+      },
+      "5": {
+        "mean_lohi_delta": 0.1463,
+        "mean_hilo_delta": 0.55503,
+        "mean_asymmetry": 0.40873,
+        "n_pairs": 3
+      },
+      "6": {
+        "mean_lohi_delta": 0.23465,
+        "mean_hilo_delta": 0.84525,
+        "mean_asymmetry": 0.6106,
+        "n_pairs": 2
+      },
+      "7": {
+        "mean_lohi_delta": 0.3126,
+        "mean_hilo_delta": 1.4762,
+        "mean_asymmetry": 1.1636,
+        "n_pairs": 1
+      }
+    },
+    "alignment_by_gap": {
+      "1": {
+        "mean_top1_agreement": 0.52687,
+        "mean_nestedness": 0.67644,
+        "mean_spearman": 0.77743,
+        "n_pairs": 7
+      },
+      "2": {
+        "mean_top1_agreement": 0.49007,
+        "mean_nestedness": 0.71103,
+        "mean_spearman": 0.75383,
+        "n_pairs": 6
+      },
+      "3": {
+        "mean_top1_agreement": 0.45274,
+        "mean_nestedness": 0.73668,
+        "mean_spearman": 0.73026,
+        "n_pairs": 5
+      },
+      "4": {
+        "mean_top1_agreement": 0.41482,
+        "mean_nestedness": 0.7528,
+        "mean_spearman": 0.70323,
+        "n_pairs": 4
+      },
+      "5": {
+        "mean_top1_agreement": 0.37523,
+        "mean_nestedness": 0.7655,
+        "mean_spearman": 0.6734,
+        "n_pairs": 3
+      },
+      "6": {
+        "mean_top1_agreement": 0.3248,
+        "mean_nestedness": 0.76435,
+        "mean_spearman": 0.6348,
+        "n_pairs": 2
+      },
+      "7": {
+        "mean_top1_agreement": 0.2345,
+        "mean_nestedness": 0.7308,
+        "mean_spearman": 0.5648,
+        "n_pairs": 1
+      }
+    }
+  },
+  "mechanism_3seed": {
+    "asymmetry_by_gap": {
+      "1": {
+        "mean_lohi_delta": -0.00733,
+        "mean_hilo_delta": 0.05049,
+        "mean_asymmetry": 0.05781,
+        "n_pairs": 7
+      },
+      "2": {
+        "mean_lohi_delta": -0.00425,
+        "mean_hilo_delta": 0.13832,
+        "mean_asymmetry": 0.14257,
+        "n_pairs": 6
+      },
+      "3": {
+        "mean_lohi_delta": 0.00876,
+        "mean_hilo_delta": 0.25796,
+        "mean_asymmetry": 0.2492,
+        "n_pairs": 5
+      },
+      "4": {
+        "mean_lohi_delta": 0.034,
+        "mean_hilo_delta": 0.39685,
+        "mean_asymmetry": 0.36285,
+        "n_pairs": 4
+      },
+      "5": {
+        "mean_lohi_delta": 0.06427,
+        "mean_hilo_delta": 0.6143,
+        "mean_asymmetry": 0.55003,
+        "n_pairs": 3
+      },
+      "6": {
+        "mean_lohi_delta": 0.09275,
+        "mean_hilo_delta": 0.94355,
+        "mean_asymmetry": 0.8508,
+        "n_pairs": 2
+      },
+      "7": {
+        "mean_lohi_delta": 0.126,
+        "mean_hilo_delta": 1.6318,
+        "mean_asymmetry": 1.5058,
+        "n_pairs": 1
+      }
+    },
+    "alignment_by_gap": {
+      "1": {
+        "mean_top1_agreement": 0.52563,
+        "mean_nestedness": 0.66479,
+        "mean_spearman": 0.75834,
+        "n_pairs": 7
+      },
+      "2": {
+        "mean_top1_agreement": 0.48273,
+        "mean_nestedness": 0.69445,
+        "mean_spearman": 0.7324,
+        "n_pairs": 6
+      },
+      "3": {
+        "mean_top1_agreement": 0.43974,
+        "mean_nestedness": 0.71306,
+        "mean_spearman": 0.70262,
+        "n_pairs": 5
+      },
+      "4": {
+        "mean_top1_agreement": 0.39472,
+        "mean_nestedness": 0.72088,
+        "mean_spearman": 0.66565,
+        "n_pairs": 4
+      },
+      "5": {
+        "mean_top1_agreement": 0.346,
+        "mean_nestedness": 0.72163,
+        "mean_spearman": 0.62237,
+        "n_pairs": 3
+      },
+      "6": {
+        "mean_top1_agreement": 0.2826,
+        "mean_nestedness": 0.70535,
+        "mean_spearman": 0.5622,
+        "n_pairs": 2
+      },
+      "7": {
+        "mean_top1_agreement": 0.1637,
+        "mean_nestedness": 0.6357,
+        "mean_spearman": 0.4546,
+        "n_pairs": 1
+      }
+    }
+  },
+  "fixed_8seed": {
+    "asymmetry_by_gap": {
+      "1": {
+        "mean_lohi_delta": -0.00526,
+        "mean_hilo_delta": 0.05199,
+        "mean_asymmetry": 0.05724,
+        "n_pairs": 7
+      },
+      "2": {
+        "mean_lohi_delta": 0.00618,
+        "mean_hilo_delta": 0.12705,
+        "mean_asymmetry": 0.12087,
+        "n_pairs": 6
+      },
+      "3": {
+        "mean_lohi_delta": 0.02988,
+        "mean_hilo_delta": 0.2399,
+        "mean_asymmetry": 0.21002,
+        "n_pairs": 5
+      },
+      "4": {
+        "mean_lohi_delta": 0.07117,
+        "mean_hilo_delta": 0.36485,
+        "mean_asymmetry": 0.29367,
+        "n_pairs": 4
+      },
+      "5": {
+        "mean_lohi_delta": 0.13293,
+        "mean_hilo_delta": 0.5521,
+        "mean_asymmetry": 0.41917,
+        "n_pairs": 3
+      },
+      "6": {
+        "mean_lohi_delta": 0.214,
+        "mean_hilo_delta": 0.86955,
+        "mean_asymmetry": 0.65555,
+        "n_pairs": 2
+      },
+      "7": {
+        "mean_lohi_delta": 0.2996,
+        "mean_hilo_delta": 1.5073,
+        "mean_asymmetry": 1.2077,
+        "n_pairs": 1
+      }
+    },
+    "alignment_by_gap": {
+      "1": {
+        "mean_top1_agreement": 0.53121,
+        "mean_nestedness": 0.67907,
+        "mean_spearman": 0.7797,
+        "n_pairs": 7
+      },
+      "2": {
+        "mean_top1_agreement": 0.49337,
+        "mean_nestedness": 0.71357,
+        "mean_spearman": 0.75588,
+        "n_pairs": 6
+      },
+      "3": {
+        "mean_top1_agreement": 0.45506,
+        "mean_nestedness": 0.73838,
+        "mean_spearman": 0.7316,
+        "n_pairs": 5
+      },
+      "4": {
+        "mean_top1_agreement": 0.4181,
+        "mean_nestedness": 0.75605,
+        "mean_spearman": 0.70563,
+        "n_pairs": 4
+      },
+      "5": {
+        "mean_top1_agreement": 0.37593,
+        "mean_nestedness": 0.767,
+        "mean_spearman": 0.67507,
+        "n_pairs": 3
+      },
+      "6": {
+        "mean_top1_agreement": 0.3238,
+        "mean_nestedness": 0.76635,
+        "mean_spearman": 0.6358,
+        "n_pairs": 2
+      },
+      "7": {
+        "mean_top1_agreement": 0.2313,
+        "mean_nestedness": 0.7316,
+        "mean_spearman": 0.5648,
+        "n_pairs": 1
+      }
+    }
+  },
+  "mechanism_8seed": {
+    "asymmetry_by_gap": {
+      "1": {
+        "mean_lohi_delta": -0.00659,
+        "mean_hilo_delta": 0.04871,
+        "mean_asymmetry": 0.0553,
+        "n_pairs": 7
+      },
+      "2": {
+        "mean_lohi_delta": -0.0029,
+        "mean_hilo_delta": 0.13223,
+        "mean_asymmetry": 0.13513,
+        "n_pairs": 6
+      },
+      "3": {
+        "mean_lohi_delta": 0.01048,
+        "mean_hilo_delta": 0.25712,
+        "mean_asymmetry": 0.24664,
+        "n_pairs": 5
+      },
+      "4": {
+        "mean_lohi_delta": 0.0339,
+        "mean_hilo_delta": 0.40475,
+        "mean_asymmetry": 0.37085,
+        "n_pairs": 4
+      },
+      "5": {
+        "mean_lohi_delta": 0.06377,
+        "mean_hilo_delta": 0.62163,
+        "mean_asymmetry": 0.55787,
+        "n_pairs": 3
+      },
+      "6": {
+        "mean_lohi_delta": 0.0954,
+        "mean_hilo_delta": 0.9702,
+        "mean_asymmetry": 0.8748,
+        "n_pairs": 2
+      },
+      "7": {
+        "mean_lohi_delta": 0.1243,
+        "mean_hilo_delta": 1.6131,
+        "mean_asymmetry": 1.4888,
+        "n_pairs": 1
+      }
+    },
+    "alignment_by_gap": {
+      "1": {
+        "mean_top1_agreement": 0.52733,
+        "mean_nestedness": 0.66603,
+        "mean_spearman": 0.7592,
+        "n_pairs": 7
+      },
+      "2": {
+        "mean_top1_agreement": 0.48457,
+        "mean_nestedness": 0.69538,
+        "mean_spearman": 0.73317,
+        "n_pairs": 6
+      },
+      "3": {
+        "mean_top1_agreement": 0.44098,
+        "mean_nestedness": 0.71318,
+        "mean_spearman": 0.70316,
+        "n_pairs": 5
+      },
+      "4": {
+        "mean_top1_agreement": 0.39672,
+        "mean_nestedness": 0.72252,
+        "mean_spearman": 0.66778,
+        "n_pairs": 4
+      },
+      "5": {
+        "mean_top1_agreement": 0.34663,
+        "mean_nestedness": 0.72287,
+        "mean_spearman": 0.62467,
+        "n_pairs": 3
+      },
+      "6": {
+        "mean_top1_agreement": 0.2813,
+        "mean_nestedness": 0.7049,
+        "mean_spearman": 0.5643,
+        "n_pairs": 2
+      },
+      "7": {
+        "mean_top1_agreement": 0.1633,
+        "mean_nestedness": 0.6345,
+        "mean_spearman": 0.4569,
+        "n_pairs": 1
+      }
+    }
+  }
+}
