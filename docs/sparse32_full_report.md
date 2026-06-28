@@ -243,6 +243,18 @@ mismatch delta는 각 모델 자신의 matched inference를 baseline (δ = 0)으
 
 ---
 
+## 8b. Mismatch Delta Heatmaps (Full 8×8)
+
+![Figure 1: Mismatch delta loss heatmap — fixed-step vs same-compute](../results/report_figures/01_mismatch_delta_comparison.png)
+
+> **읽는 법**: 행=train_k, 열=infer_k. 빨강=양수(불일치로 손실 증가), 파랑=음수. 대각선=0(matched baseline). 왼쪽 열 전체가 짙은 빨강 → hi→lo 비용이 크다.
+
+![Figure 2: Directional asymmetry heatmap — delta(hi→lo) − delta(lo→hi)](../results/report_figures/02_asymmetry_direction.png)
+
+> **읽는 법**: 빨강(하삼각 행>열) = hi→lo가 더 비싸다. k=8→k=1이 가장 짙다. 두 budget에서 동일 패턴.
+
+---
+
 ## 9. B9: Asymmetry by K-gap (95% CI + Linear Extrapolation)
 
 asymmetry = |delta(hi→lo) − delta(lo→hi)|
@@ -277,6 +289,14 @@ asymmetry = |delta(hi→lo) − delta(lo→hi)|
 
 ---
 
+## 9b. Asymmetry by K-gap — 95% CI vs Linear Extrapolation
+
+![Figure 3: Asymmetry by k-gap with 95% seed-level CI and linear extrapolation baseline](../results/report_figures/03_asymmetry_gap_ci.png)
+
+> **읽는 법**: 빨강 막대=hi→lo 평균, 파랑 막대=lo→hi 절댓값. 파란 선+CI=|asymmetry| 측정값. 회색 점선=gap=1 기준 선형 외삽. gap=7에서 CI lower bound가 선형 예측을 명확히 초과.
+
+---
+
 ## 10. Noise Floor: Adjacent-k (gap=1) 분리
 
 같은 gap=1이라도 방향에 따라 signal 강도가 전혀 다르다.
@@ -298,6 +318,14 @@ asymmetry = |delta(hi→lo) − delta(lo→hi)|
 | lo→hi | 0.5–2.8 (most < 2) | 대부분 noise |
 
 **핵심**: "인접 k는 안전하다"는 주장은 **lo→hi 방향에만** 성립한다. hi→lo는 gap=1에서도 명확한 비용이 있다.
+
+---
+
+## 10b. Noise Floor Direction Chart
+
+![Figure 4: Adjacent-k noise floor — mean delta ± std and SNR by direction](../results/report_figures/04_noise_floor_direction.png)
+
+> **읽는 법**: 빨강=hi→lo, 회색/파랑=lo→hi. 오른쪽 SNR 차트에서 점선(SNR=2) 위 빨강 막대만 "STRONG" 신호. lo→hi는 대부분 점선 아래(noise level).
 
 ---
 
@@ -325,6 +353,18 @@ routing alignment와 |mismatch delta| 간 Spearman 상관 (n=8 seeds, descriptiv
 
 음의 상관: routing alignment가 낮을수록 mismatch cost가 크다.
 n=8이므로 인과 주장은 불가하며, 방향성만 서술 가능.
+
+---
+
+## 11b. Top-1 Agreement and Matched Loss Figures
+
+![Figure 5: Top-1 expert agreement heatmap — same-seed different-k models](../results/report_figures/05_top1_agreement_comparison.png)
+
+> **읽는 법**: 색이 진할수록 top-1 expert 일치율이 높다. 대각선=1.0. 하단 우측(high-k 간)이 진함, k=1 관련 행/열이 옅음. random=0.031, oracle=1.0.
+
+![Figure 6: Matched inference loss by k — fixed-step vs same-compute](../results/report_figures/06_matched_loss_comparison.png)
+
+> **읽는 법**: 파란=fixed-step(k 클수록 loss 낮음), 빨강=same-compute(k=1이 낮음). k=4에서 교차(공통 기준점). same-compute에서 k=1이 낮은 것은 step 수 효과(6000 steps) 포함.
 
 ---
 
