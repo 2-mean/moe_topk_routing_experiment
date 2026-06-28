@@ -8,6 +8,10 @@ Produces:
     04_noise_floor_direction.png         adjacent-k SNR by direction
     05_top1_agreement_comparison.png     top1 fixed vs same-compute side-by-side
     06_matched_loss_comparison.png       matched loss by k, two budgets
+    07_nestedness_comparison.png       nestedness (overlap recall) fixed vs same-compute
+    08_spearman_comparison.png         spearman rank correlation fixed vs same-compute
+    09_nestedness_excess_comparison.png  obs nestedness − random baseline (max k / E)
+    presentation/                      larger single-budget heatmaps for slides
 """
 from __future__ import annotations
 
@@ -21,7 +25,9 @@ import matplotlib.patches as mpatches
 import numpy as np
 
 OUT = Path("results/report_figures")
+PRES = OUT / "presentation"
 OUT.mkdir(parents=True, exist_ok=True)
+PRES.mkdir(parents=True, exist_ok=True)
 
 FS = Path("results/sparse32_kgrid_fixed_step_8seed_summary")
 MC = Path("results/sparse32_kgrid_same_compute_8seed_summary")
@@ -92,6 +98,63 @@ def annotate_cells(ax, mat, fmt=".3f", fontsize=7, threshold=None):
             ax.text(j, i, f"{v:{fmt}}", ha="center", va="center", fontsize=fontsize, color=color)
 
 
+def build_pair_matrix(pair_rows, metric: str, diagonal: float = 1.0, symmetric: bool = True):
+    mat = np.full((8, 8), np.nan)
+    for r in pair_rows:
+        if r["metric"] != metric:
+            continue
+        a, b = r["a"] - 1, r["b"] - 1
+        mat[a, b] = r["mean"]
+        if symmetric:
+            mat[b, a] = r["mean"]
+    for i in range(8):
+        mat[i, i] = diagonal
+    return mat
+
+
+def build_nestedness_excess_matrix(pair_rows):
+    mat = np.full((8, 8), np.nan)
+    for r in pair_rows:
+        if r["metric"] != "nestedness":
+            continue
+        a, b = r["a"], r["b"]
+        rand = max(a, b) / E
+        excess = r["mean"] - rand
+        ai, bi = a - 1, b - 1
+        mat[ai, bi] = excess
+        mat[bi, ai] = excess
+    for i in range(8):
+        mat[i, i] = 0.0
+    return mat
+
+
+def save_single_heatmap(mat, title, out_path, vmin, vmax, cmap, cbar_label, fmt=".3f", dpi=180):
+    fig, ax = plt.subplots(figsize=(8.5, 7.2), constrained_layout=True)
+    im = ax.imshow(mat, vmin=vmin, vmax=vmax, cmap=cmap, aspect="auto")
+    ax.set_xticks(range(8))
+    ax.set_xticklabels([f"k={k}" for k in KS], rotation=45, ha="right")
+    ax.set_yticks(range(8))
+    ax.set_yticklabels([f"k={k}" for k in KS])
+    ax.set_title(title, fontsize=12, pad=10)
+    ax.set_xlabel("train_k (model B)", fontsize=10)
+    ax.set_ylabel("train_k (model A)", fontsize=10)
+    thr = (vmax - vmin) * 0.55 if vmax != vmin else None
+    annotate_cells(ax, mat, fmt=fmt, fontsize=9, threshold=thr)
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label=cbar_label)
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+
+
+def save_presentation_pair(mats_labels, stem, vmin, vmax, cmap, cbar_label, fmt=".3f"):
+    for mat, label in mats_labels:
+        save_single_heatmap(
+            mat,
+            f"{stem} — {label} (8-seed mean)",
+            PRES / f"{stem}_{label.lower().replace('-', '_')}.png",
+            vmin, vmax, cmap, cbar_label, fmt=fmt,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Helper: build 8x8 mismatch delta matrix
 # ---------------------------------------------------------------------------
@@ -125,6 +188,11 @@ fig.suptitle("Figure 1: Mismatch loss delta heatmap (mean over 8 seeds)\nPositiv
 fig.savefig(OUT / "01_mismatch_delta_comparison.png", dpi=150, bbox_inches="tight")
 plt.close(fig)
 print("wrote 01")
+save_presentation_pair(
+    [(fs_mat, "Fixed-step"), (mc_mat, "Same-compute")],
+    "01_mismatch_delta", -vmax, vmax, "RdBu_r",
+    "loss(train,infer) − loss(train,train)", fmt=".3f",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -169,6 +237,11 @@ fig.suptitle("Figure 2: Directional asymmetry heatmap\nRed (upper triangle): hi�
 fig.savefig(OUT / "02_asymmetry_direction.png", dpi=150, bbox_inches="tight")
 plt.close(fig)
 print("wrote 02")
+save_presentation_pair(
+    [(fs_asym, "Fixed-step"), (mc_asym, "Same-compute")],
+    "02_asymmetry", -vmax_a, vmax_a, "RdBu_r",
+    "delta(hi→lo) − delta(lo→hi)", fmt=".2f",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -311,15 +384,7 @@ print("wrote 04")
 # 05: Top1 agreement — matched train-k pairs, fixed vs same-compute
 # ---------------------------------------------------------------------------
 def build_top1_matrix(pair_rows):
-    mat = np.full((8, 8), np.nan)
-    for r in pair_rows:
-        if r["metric"] != "top1_agreement": continue
-        a, b = r["a"] - 1, r["b"] - 1
-        mat[a, b] = r["mean"]
-        mat[b, a] = r["mean"]  # symmetric
-    for i in range(8):
-        mat[i, i] = 1.0  # matched = 1.0
-    return mat
+    return build_pair_matrix(pair_rows, "top1_agreement", diagonal=1.0)
 
 fs_top1 = build_top1_matrix(fs_pairs)
 mc_top1 = build_top1_matrix(mc_pairs)
@@ -339,6 +404,10 @@ fig.suptitle("Figure 5: Top-1 expert agreement between same-seed different-k mod
 fig.savefig(OUT / "05_top1_agreement_comparison.png", dpi=150, bbox_inches="tight")
 plt.close(fig)
 print("wrote 05")
+save_presentation_pair(
+    [(fs_top1, "Fixed-step"), (mc_top1, "Same-compute")],
+    "05_top1_agreement", 0, 1, "Blues", "top1 agreement", fmt=".3f",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -389,4 +458,81 @@ plt.close(fig)
 print("wrote 06")
 
 
+# ---------------------------------------------------------------------------
+# 07: Nestedness heatmap
+# ---------------------------------------------------------------------------
+fs_nest = build_pair_matrix(fs_pairs, "nestedness", diagonal=1.0)
+mc_nest = build_pair_matrix(mc_pairs, "nestedness", diagonal=1.0)
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5.5), constrained_layout=True)
+for ax, mat, label in zip(axes, [fs_nest, mc_nest], ["Fixed-step", "Same-compute"]):
+    im = ax.imshow(mat, vmin=0, vmax=1, cmap="YlGnBu", aspect="auto")
+    ax.set_xticks(range(8)); ax.set_xticklabels([f"k={k}" for k in KS], rotation=45, ha="right")
+    ax.set_yticks(range(8)); ax.set_yticklabels([f"k={k}" for k in KS])
+    ax.set_title(f"Nestedness (overlap recall) — {label}\nRandom baseline = max(k_a,k_b)/32")
+    ax.set_xlabel("train_k"); ax.set_ylabel("train_k")
+    annotate_cells(ax, mat, fmt=".3f", fontsize=6.5, threshold=0.55)
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="nestedness")
+fig.suptitle("Figure 7: Smaller-k expert overlap recall within larger-k set (same-seed, different-k)", fontsize=10)
+fig.savefig(OUT / "07_nestedness_comparison.png", dpi=150, bbox_inches="tight")
+plt.close(fig)
+print("wrote 07")
+save_presentation_pair(
+    [(fs_nest, "Fixed-step"), (mc_nest, "Same-compute")],
+    "07_nestedness", 0, 1, "YlGnBu", "nestedness", fmt=".3f",
+)
+
+
+# ---------------------------------------------------------------------------
+# 08: Spearman heatmap
+# ---------------------------------------------------------------------------
+fs_spear = build_pair_matrix(fs_pairs, "spearman", diagonal=1.0)
+mc_spear = build_pair_matrix(mc_pairs, "spearman", diagonal=1.0)
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5.5), constrained_layout=True)
+for ax, mat, label in zip(axes, [fs_spear, mc_spear], ["Fixed-step", "Same-compute"]):
+    im = ax.imshow(mat, vmin=0, vmax=1, cmap="PuRd", aspect="auto")
+    ax.set_xticks(range(8)); ax.set_xticklabels([f"k={k}" for k in KS], rotation=45, ha="right")
+    ax.set_yticks(range(8)); ax.set_yticklabels([f"k={k}" for k in KS])
+    ax.set_title(f"Spearman (gate logit ranking) — {label}\nRandom baseline = 0")
+    ax.set_xlabel("train_k"); ax.set_ylabel("train_k")
+    annotate_cells(ax, mat, fmt=".3f", fontsize=6.5, threshold=0.55)
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="spearman")
+fig.suptitle("Figure 8: Router logit ranking correlation between same-seed different-k models", fontsize=10)
+fig.savefig(OUT / "08_spearman_comparison.png", dpi=150, bbox_inches="tight")
+plt.close(fig)
+print("wrote 08")
+save_presentation_pair(
+    [(fs_spear, "Fixed-step"), (mc_spear, "Same-compute")],
+    "08_spearman", 0, 1, "PuRd", "spearman", fmt=".3f",
+)
+
+
+# ---------------------------------------------------------------------------
+# 09: Nestedness excess (obs − max k / E)
+# ---------------------------------------------------------------------------
+fs_nex = build_nestedness_excess_matrix(fs_pairs)
+mc_nex = build_nestedness_excess_matrix(mc_pairs)
+nex_vmax = max(np.nanmax(fs_nex), np.nanmax(mc_nex))
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5.5), constrained_layout=True)
+for ax, mat, label in zip(axes, [fs_nex, mc_nex], ["Fixed-step", "Same-compute"]):
+    im = ax.imshow(mat, vmin=0, vmax=nex_vmax, cmap="Oranges", aspect="auto")
+    ax.set_xticks(range(8)); ax.set_xticklabels([f"k={k}" for k in KS], rotation=45, ha="right")
+    ax.set_yticks(range(8)); ax.set_yticklabels([f"k={k}" for k in KS])
+    ax.set_title(f"Nestedness excess (obs − max k/32) — {label}\nStructure beyond cardinality")
+    ax.set_xlabel("train_k"); ax.set_ylabel("train_k")
+    annotate_cells(ax, mat, fmt=".3f", fontsize=6.5, threshold=nex_vmax * 0.5)
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="excess over random")
+fig.suptitle("Figure 9: Nestedness excess above uniform-random overlap baseline", fontsize=10)
+fig.savefig(OUT / "09_nestedness_excess_comparison.png", dpi=150, bbox_inches="tight")
+plt.close(fig)
+print("wrote 09")
+save_presentation_pair(
+    [(fs_nex, "Fixed-step"), (mc_nex, "Same-compute")],
+    "09_nestedness_excess", 0, nex_vmax, "Oranges", "nestedness excess", fmt=".3f",
+)
+
+
 print(f"\nAll figures saved to {OUT}/")
+print(f"Presentation-sized single-budget heatmaps saved to {PRES}/")
