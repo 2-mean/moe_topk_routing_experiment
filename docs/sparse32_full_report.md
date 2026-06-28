@@ -90,10 +90,12 @@ k_train ∈ {1..8}, k_infer ∈ {1..8} → 64 matched runs per budget × 8 seeds
 
 ---
 
-## 5. B5: Training Variability Null (핵심 베이스라인)
+## 5. B5: Cross-seed Expert Identity Null (Sanity Check)
 
-**설계**: 같은 k, 다른 seed로 학습한 모델 간 alignment.
-within-k alignment = initialization + optimization stochasticity의 합산.
+> **주의**: MoE는 expert permutation symmetry를 가진다. seed 0의 expert 7과 seed 3의 expert 7은 같은 역할을 학습했다는 보장이 없다. 따라서 different-seed 모델 간 expert identity(top1_agreement)가 random 수준으로 떨어지는 것은 **예상된 결과이며 이상한 신호가 아니다.**
+
+**설계**: 같은 k, 다른 seed 모델 간 expert id alignment 측정.
+**역할**: k-effect baseline이 아니라, expert id가 seed 간 정렬되지 않음을 확인하는 sanity check.
 
 **결과**: within-k top1 ≈ **random baseline (1/32 = 0.031)**에 수렴.
 
@@ -121,24 +123,23 @@ within-k alignment = initialization + optimization stochasticity의 합산.
 
 **세 수준의 비교 구조 (핵심):**
 
-$$\text{random} \approx \text{within-k} \ll \text{across-k} \ll \text{oracle}$$
-
-top1 기준 실제 수치:
-
-$$0.031 \approx 0.031\text{(within-k)} \ll 0.15 \sim 0.70\text{(across-k)} \ll 1.0\text{(oracle)}$$
+$$\underbrace{0.031}_{\text{random} = 1/E} \approx \underbrace{0.031}_{\text{cross-seed same-k (예상)}}\ll \underbrace{0.15 \sim 0.70}_{\text{same-seed across-k}} \ll \underbrace{1.0}_{\text{oracle cutoff}}$$
 
 **각 수준의 해석:**
 
-1. **within-k ≈ random (0.031)**: 같은 k, 다른 seed 모델은 expert identity alignment가 완전히 랜덤 수준. routing path는 initialization에 고정되지 않는다. within-k spearman ≈ 0 (ranking도 랜덤). 이것이 "순수 training stochasticity"의 기준선이다.
+1. **cross-seed same-k ≈ random (0.031)**: **예상된 결과.** MoE expert permutation symmetry 때문에 seed가 달라지면 expert id가 정렬되지 않는다. 이것은 training variability가 "크다"는 뜻이 아니라, **expert id가 서로 다른 seed 간 비교에 적합하지 않음**을 보여준다.
 
-2. **across-k >> random (0.15–0.70)**: 같은 seed, 다른 k 모델은 random보다 **4.8–22.2×** 높은 정렬을 보인다. 이는 동일 초기화 위에서 k가 달라도 공통 routing 구조가 **남아 있음**을 의미한다.
+2. **same-seed across-k (0.15–0.70)**: 같은 초기화, 다른 k 모델의 alignment. expert id가 공유된 상태에서 k의 차이가 alignment에 미치는 실제 영향이다. random보다 **4.8–22.2×** 높으므로 같은 초기화 안에서는 k가 달라도 공통 routing 구조가 남는다.
 
-3. **across-k << oracle (oracle gap 0.30–0.85)**: 그러나 동일 logit의 cutoff만 다를 때의 oracle(top1=1.0)에는 크게 못 미친다. 즉 k는 shared structure 위에서 routing priority를 **체계적으로 재구성**한다.
+3. **oracle cutoff (1.0)**: 동일 router logit에서 k threshold만 다를 때. 이 oracle과 across-k 사이의 gap(0.30–0.85)이 **k가 routing priority를 재구성한다는 핵심 증거**다.
 
-4. **expert frequency 확인**: max_expert_share = 0.037–0.044 (≈ 1/32 = 0.031). expert popularity 편향이 없어서 within-k ≈ random은 편향 때문이 아님을 확인.
+**B5의 올바른 역할:**
+- **k-effect의 calibration baseline이 아님** (expert permutation symmetry로 인해 cross-seed 비교 자체가 무의미)
+- **expert id 비교가 same-W₀ 조건에서만 의미 있음을 정당화하는 sanity check**
+- across-k 분석이 반드시 same-seed(same-W₀) 조건에서 이뤄져야 한다는 근거
 
-**수정된 Claim A 표현**:
-> routing은 random도 아니고 oracle cutoff도 아니다. 같은 초기화 안에서 k가 달라도 공통 구조가 남지만(across-k >> random), training-time k는 그 공통 구조 위에서 expert priority를 체계적으로 재구성한다(across-k << oracle).
+**Claim A의 핵심 증거:**
+> oracle과 across-k 사이의 gap — `same-seed across-k(0.15–0.70) << oracle(1.0)` — 이 k가 routing priority를 재구성한다는 직접적인 수치다. cross-seed 비교(≈ random)는 이 claim의 baseline이 아니라, 비교 방법의 sanity check다.
 
 ---
 
@@ -324,8 +325,9 @@ n=8이므로 인과 주장은 불가하며, 방향성만 서술 가능.
 
 | Claim | 표현 | Evidence 강도 | 핵심 수치 |
 |---|---|---|---|
-| **A-1** | same-seed 안에서 k간 공통 routing 구조 존재 | **강함** | across-k top1: random(0.031) 대비 4.8–22.2× |
-| **A-2** | k는 routing priority를 재구성한다 (oracle 아님) | **강함** | top1 oracle gap 0.30–0.85; 단순 cutoff가 아님 |
+| **A-1** | same-seed 안에서 k간 공통 routing 구조가 남는다 | **강함** | same-seed across-k top1: random(0.031) 대비 4.8–22.2× |
+| **A-2** | k는 routing priority를 재구성한다 (단순 cutoff 아님) | **강함** | oracle gap 0.30–0.85; oracle은 same logit cutoff만 다른 경우 |
+| **B5-sanity** | expert id 비교는 same-W₀ 조건에서만 유효하다 | **sanity** | cross-seed same-k top1 ≈ random = 1/32 (permutation symmetry 예상 결과) |
 | **B** | 차이가 cardinality만이 아니다 | **중간-강함** | nestedness_excess 0.19–0.59 above b/32 |
 | **C** | 인기 expert 공유 때문이 아니다 | **중간** | max_expert_share 0.037–0.044 ≈ 1/32 |
 | **D** | hi→lo가 lo→hi보다 비싸다 | **가장 강함** | 8/8 seed unanimity, two budgets, 비율 5–13× |
@@ -341,7 +343,8 @@ n=8이므로 인과 주장은 불가하며, 방향성만 서술 가능.
 ### 주장 가능 (현재 evidence로)
 
 - "같은 초기화 안에서 k가 달라도 routing 공통 구조가 남는다 (random보다 4.8–22.2×)"
-- "그러나 oracle cutoff와는 크게 다르다: routing priority가 재구성된다 (oracle gap 0.30–0.85)"
+- "그러나 oracle cutoff와는 크게 다르다: k는 routing priority를 재구성한다 (oracle gap 0.30–0.85)"
+- "cross-seed 비교가 random에 수렴하는 것은 MoE permutation symmetry의 예상 결과로, k 효과를 보여주는 게 아니다"
 - "hi→lo 추론은 gap=1에서도 비용이 있다 (SNR 3–15, 8/8 seed)"
 - "lo→hi gap=1 전환은 noise 수준 (SNR < 2, 부호 혼재)"
 - "gap=7 asymmetry는 선형 외삽 CI lower bound를 명확히 초과한다 (fixed 1.14 > 0.40, same-compute 1.42 > 0.39)"
@@ -375,9 +378,11 @@ n=8이므로 인과 주장은 불가하며, 방향성만 서술 가능.
 
 ### 세 수준의 routing alignment
 
-$$\underbrace{0.031}_{\text{random}=1/E} \approx \underbrace{0.031 \sim 0.033}_{\text{within-k (noise)}} \ll \underbrace{0.15 \sim 0.70}_{\text{across-k (observed)}} \ll \underbrace{1.0}_{\text{oracle}}$$
+$$\underbrace{0.031}_{\text{random}=1/E} \approx \underbrace{0.031}_{\substack{\text{cross-seed same-k} \\ \text{(MoE permutation symmetry, 예상)}}} \ll \underbrace{0.15 \sim 0.70}_{\substack{\text{same-seed across-k} \\ \text{(k-effect의 실제 수치)}}} \ll \underbrace{1.0}_{\substack{\text{oracle cutoff} \\ \text{(same logit, diff k)}}}$$
 
-이 구조가 B5의 핵심이다.
+- **cross-seed ≈ random**: 예상된 결과. k-effect baseline이 아님.
+- **same-seed across-k vs oracle gap**: 이것이 Claim A의 핵심 수치.
+- k-effect claim은 oracle과의 gap에서 나온다.
 
 ### Evidence 강도 TOP 5
 
@@ -393,7 +398,8 @@ $$\underbrace{0.031}_{\text{random}=1/E} \approx \underbrace{0.031 \sim 0.033}_{
 
 | 위험한 표현 | 안전한 대안 |
 |---|---|
-| "k 바꾸면 routing이 random처럼 달라진다" | "같은 seed 안에서는 구조가 남는다, 단 oracle은 아니다" |
+| "k 바꾸면 routing이 random처럼 달라진다" | "같은 seed 안에서는 구조가 남는다(4.8–22.2× above random), 단 oracle은 아니다" |
+| "cross-seed ≈ random은 training variability가 크다는 뜻이다" | "MoE permutation symmetry 때문에 예상된 결과. k-effect와 무관하다" |
 | "k=1→k=2는 오히려 좋다" | "lo→hi gap=1은 noise 수준이라 판단 불가" |
 | "asymmetry는 초선형 법칙이다" | "gap=7에서만 CI가 linear를 초과한다" |
 | "routing divergence가 mismatch를 유발한다" | "상관 0.71–0.90이지만 n=8, 인과 미검증" |
