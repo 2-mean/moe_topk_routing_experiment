@@ -198,6 +198,22 @@ SNR=2 점선 위 빨강(hi→lo)만 STRONG · lo→hi는 대부분 noise
 
 ---
 
+# Nestedness Heatmap
+
+![w:900](../results/report_figures/07_nestedness_comparison.png)
+
+overlap recall · random = max(k)/32 · excess 0.19–0.59
+
+---
+
+# Spearman Heatmap
+
+![w:900](../results/report_figures/08_spearman_comparison.png)
+
+Gate logit **ranking** correlation · random=0 · 7-8: 0.86–0.89 · k=1 관련: 0.41–0.56
+
+---
+
 # Matched Loss Context
 
 ![w:900](../results/report_figures/06_matched_loss_comparison.png)

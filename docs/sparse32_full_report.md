@@ -368,6 +368,27 @@ n=8이므로 인과 주장은 불가하며, 방향성만 서술 가능.
 
 ---
 
+## 11c. Routing Metric Heatmaps (Nestedness & Spearman)
+
+![Figure 7: Nestedness overlap recall — fixed-step vs same-compute](../results/report_figures/07_nestedness_comparison.png)
+
+> **읽는 법**: smaller-k expert가 larger-k set에 포함되는 per-token recall. 대각선=1.0. k=1-8 pair는 0.73 (random 0.25 대비 +0.48). nestedness excess 0.19–0.59.
+
+![Figure 8: Spearman gate logit ranking — fixed-step vs same-compute](../results/report_figures/08_spearman_comparison.png)
+
+> **읽는 법**: router gate logit **ranking** 상관. random=0, oracle=1.0. 인접 k (7-8): ~0.86–0.89. k=1 관련: ~0.41–0.56 — top1 agreement보다 ranking은 더 보존됨. routing–mismatch 상관: 4-8 spearman −0.81, 4-5 −0.91 (n=8, descriptive).
+
+### Spearman key pairs (8-seed mean)
+
+| pair | Fixed-step | Same-compute | 해석 |
+|---|---:|---:|---|
+| 7-8 | 0.860 | 0.892 | 인접 high-k — ranking 거의 보존 |
+| 4-5 | 0.817 | 0.820 | mid-k 간 강한 rank correlation |
+| 1-2 | 0.560 | 0.413 | k=1 관련 — logit ordering 분기 |
+| 1-8 | 0.565 | 0.457 | k span 최대 — top1(0.23)보다 spearman 높음 |
+
+---
+
 ## 12. Claim별 Evidence 강도
 
 | Claim | 표현 | Evidence 강도 | 핵심 수치 |

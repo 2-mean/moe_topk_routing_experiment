@@ -1,0 +1,31 @@
+{
+  "generated": "2026-06-29",
+  "generator": "scripts/generate_report_heatmaps.py (matplotlib)",
+  "directory": "results/report_figures/",
+  "figures": [
+    "01_mismatch_delta_comparison.png",
+    "02_asymmetry_direction.png",
+    "03_asymmetry_gap_ci.png",
+    "04_noise_floor_direction.png",
+    "05_top1_agreement_comparison.png",
+    "06_matched_loss_comparison.png",
+    "07_nestedness_comparison.png",
+    "08_spearman_comparison.png",
+    "09_nestedness_excess_comparison.png"
+  ],
+  "presentation": [
+    "presentation/01_mismatch_delta_fixed_step.png",
+    "presentation/01_mismatch_delta_same_compute.png",
+    "presentation/02_asymmetry_fixed_step.png",
+    "presentation/02_asymmetry_same_compute.png",
+    "presentation/05_top1_agreement_fixed_step.png",
+    "presentation/05_top1_agreement_same_compute.png",
+    "presentation/07_nestedness_fixed_step.png",
+    "presentation/07_nestedness_same_compute.png",
+    "presentation/08_spearman_fixed_step.png",
+    "presentation/08_spearman_same_compute.png",
+    "presentation/09_nestedness_excess_fixed_step.png",
+    "presentation/09_nestedness_excess_same_compute.png"
+  ],
+  "regenerate": "python scripts/build_visual_assets.py"
+}
