@@ -1,0 +1,79 @@
+[baseline] run_dir = /tmp/2020110906_matryo_topk/runs/sparse32_kgrid_fixed_step_8seed/20260628_142529_full_fb0_b16_d192
+[baseline] n_experts = 32
+[baseline] seeds = [0, 1, 2, 3, 4, 5, 6, 7]
+[baseline] train_ks = [1, 2, 3, 4, 5, 6, 7, 8]
+
+[B5] Computing within-k different-seed alignment...
+  wrote 224 rows
+[across-k] Extracting from metrics.csv...
+
+========================================================================
+B5: Within-k (training noise) vs Across-k alignment
+========================================================================
+             k |         metric |  within_k_mean | all_across_k_m | within_to_acro | k_effect_excee
+---------------------------------------------------------------------------------------------------
+             1 | top1_agreement |        0.03136 |        0.22969 |         0.1365 |          False
+             2 | top1_agreement |        0.03155 |        0.41053 |         0.0769 |          False
+             3 | top1_agreement |        0.03165 |        0.46262 |         0.0684 |          False
+             4 | top1_agreement |        0.03218 |        0.49068 |         0.0656 |          False
+             5 | top1_agreement |        0.03157 |        0.50402 |         0.0626 |          False
+             6 | top1_agreement |        0.03171 |        0.50946 |         0.0622 |          False
+             7 | top1_agreement |        0.03251 |        0.50632 |         0.0642 |          False
+             8 | top1_agreement |        0.03307 |        0.49612 |         0.0667 |          False
+
+[B1] Computing random baselines...
+
+[B8] Extracting matched loss table...
+
+========================================================================
+B8: Matched loss by k (baseline for mismatch cost interpretation)
+========================================================================
+       train_k | matched_loss_m | matched_loss_s
+------------------------------------------------
+             1 |        0.44715 |        0.01152
+             2 |        0.41962 |        0.02371
+             3 |        0.40462 |        0.02174
+             4 |         0.3959 |        0.02159
+             5 |        0.39038 |        0.01188
+             6 |        0.38026 |        0.01555
+             7 |        0.37686 |        0.00836
+             8 |        0.38386 |        0.02199
+
+[B9] Computing asymmetry statistics with CI and linear extrapolation...
+
+========================================================================
+B9: Asymmetry by k-gap with 95% CI vs linear extrapolation
+========================================================================
+           gap | asymmetry_mean | asymmetry_ci95 | asymmetry_ci95 | linear_pred_fr | ratio_vs_linea | hilo_gt_lohi_u
+--------------------------------------------------------------------------------------------------------------------
+             1 |        0.05722 |        0.03357 |        0.08087 |        0.05722 |            1.0 |           True
+             2 |        0.12085 |        0.06971 |          0.172 |        0.11443 |          1.056 |           True
+             3 |        0.21004 |        0.11238 |        0.30769 |        0.17165 |          1.224 |           True
+             4 |        0.29365 |        0.15736 |        0.42994 |        0.22887 |          1.283 |           True
+             5 |        0.41916 |        0.22692 |         0.6114 |        0.28608 |          1.465 |           True
+             6 |        0.65552 |         0.3935 |        0.91755 |         0.3433 |          1.909 |           True
+             7 |        1.20777 |        1.14162 |        1.27393 |        0.40052 |          3.016 |           True
+
+[Noise] Computing noise floor for small mismatch deltas...
+
+========================================================================
+Noise floor: Adjacent-k (gap=1) mismatch delta (signal-to-noise)
+========================================================================
+       train_k |        infer_k |      direction |     mean_delta |      std_delta |            snr |  strong_signal
+--------------------------------------------------------------------------------------------------------------------
+             1 |              2 |       lo_to_hi |      -0.004896 |       0.009969 |          0.491 |          False
+             2 |              1 |       hi_to_lo |       0.261912 |       0.017032 |         15.377 |           True
+             2 |              3 |       lo_to_hi |      -0.011886 |       0.007144 |          1.664 |          False
+             3 |              2 |       hi_to_lo |       0.045732 |       0.006214 |           7.36 |           True
+             3 |              4 |       lo_to_hi |      -0.007655 |       0.004169 |          1.836 |          False
+             4 |              3 |       hi_to_lo |        0.02333 |       0.008635 |          2.702 |           True
+             4 |              5 |       lo_to_hi |      -0.004984 |       0.003065 |          1.626 |          False
+             5 |              4 |       hi_to_lo |       0.013469 |       0.004275 |           3.15 |           True
+             5 |              6 |       lo_to_hi |       -0.00302 |       0.001658 |          1.821 |          False
+             6 |              5 |       hi_to_lo |       0.008789 |       0.002034 |           4.32 |           True
+             6 |              7 |       lo_to_hi |      -0.002359 |       0.002011 |          1.173 |          False
+             7 |              6 |       hi_to_lo |       0.004655 |       0.001472 |          3.162 |           True
+             7 |              8 |       lo_to_hi |      -0.001867 |       0.001692 |          1.104 |          False
+             8 |              7 |       hi_to_lo |       0.005962 |       0.001781 |          3.347 |           True
+
+[done] wrote all baseline results to /tmp/2020110906_matryo_topk/baselines/fixed_step_8seed

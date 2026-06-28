@@ -1,0 +1,9 @@
+{
+  "run": "/tmp/2020110906_matryo_topk/runs/sparse32_kgrid_fixed_step_8seed/20260628_142529_full_fb0_b16_d192",
+  "n_experts": 32,
+  "b5_computed": true,
+  "b5_n_rows": 224,
+  "b9_gap7_ratio_vs_linear": 3.016,
+  "b9_gap7_hilo_unanimous": true,
+  "noise_floor_gap1_snr_mean": 3.5095
+}
