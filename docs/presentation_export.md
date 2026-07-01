@@ -22,6 +22,8 @@ python scripts/build_presentation_html.py
 | `07_nestedness_comparison.png` | Nestedness |
 | `08_spearman_comparison.png` | Spearman |
 | `09_nestedness_excess_comparison.png` | Nestedness excess |
+| `10_pct_change_comparison.png` | Matched loss 대비 mismatch 변화율(%) |
+| `pct_change_matrices.json` | Figure 10의 fixed/same-compute 수치 행렬 |
 | `presentation/*.png` | budget별 단독 히트맵 (발표용) |
 
 ## HTML 발표자료

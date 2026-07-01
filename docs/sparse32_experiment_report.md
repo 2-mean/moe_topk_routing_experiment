@@ -296,9 +296,10 @@ python -m moe_topk.scratch_pilot \
 ```bash
 # seeds 0-2 run과 seeds 3-7 run을 combined으로 묶기
 python scripts/build_combined_run.py \
-  --source-runs /tmp/.../sparse32_kgrid_fixed_step_3seed/... \
-                /tmp/.../sparse32_kgrid_fixed_step_seed3to7/... \
-  --out-run /tmp/.../sparse32_kgrid_fixed_step_8seed/...
+  --source-run /tmp/.../sparse32_kgrid_fixed_step_3seed/... \
+  --source-run /tmp/.../sparse32_kgrid_fixed_step_seed3to7/... \
+  --output-run /tmp/.../sparse32_kgrid_fixed_step_8seed/... \
+  --experiment-name sparse32_kgrid_fixed_step_8seed
 
 # summary/plot 재집계
 python scripts/summarize_combined_run.py \

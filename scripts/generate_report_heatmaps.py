@@ -11,10 +11,12 @@ Produces:
     07_nestedness_comparison.png       nestedness (overlap recall) fixed vs same-compute
     08_spearman_comparison.png         spearman rank correlation fixed vs same-compute
     09_nestedness_excess_comparison.png  obs nestedness − random baseline (max k / E)
-    presentation/                      larger single-budget heatmaps for slides
+    10_pct_change_comparison.png       % change vs matched loss (100*delta/matched)
+    pct_change_matrices.json           numeric % matrices (fixed + same-compute)
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -358,7 +360,7 @@ for row_ax, nf_data, label in zip(axes, [fs_nf, mc_nf], ["Fixed-step", "Same-com
     bars = ax_delta.bar(pairs, means, color=colors, alpha=0.8)
     ax_delta.errorbar(range(len(pairs)), means, yerr=stds, fmt="none", color="black", capsize=3, linewidth=1)
     ax_delta.axhline(0, color="gray", linestyle="--", linewidth=0.8)
-    ax_delta.set_xticklabels(pairs, rotation=45, ha="right", fontsize=7)
+    ax_delta.set_xticks(range(len(pairs)), pairs, rotation=45, ha="right", fontsize=7)
     ax_delta.set_ylabel("mean_delta_loss")
     ax_delta.set_title(f"{label}: adjacent-k mean delta ± std")
     red_patch = mpatches.Patch(color="#d73027", label="hi→lo")
@@ -369,7 +371,7 @@ for row_ax, nf_data, label in zip(axes, [fs_nf, mc_nf], ["Fixed-step", "Same-com
     snr_colors = ["#d73027" if s >= 2.0 else "#cccccc" for s, d in zip(snrs, dirs)]
     ax_snr.bar(pairs, snrs, color=snr_colors, alpha=0.9)
     ax_snr.axhline(2.0, color="black", linestyle="--", linewidth=1.2, label="SNR=2 threshold")
-    ax_snr.set_xticklabels(pairs, rotation=45, ha="right", fontsize=7)
+    ax_snr.set_xticks(range(len(pairs)), pairs, rotation=45, ha="right", fontsize=7)
     ax_snr.set_ylabel("SNR = |mean| / std")
     ax_snr.set_title(f"{label}: signal-to-noise ratio (SNR≥2 + all same sign = STRONG)")
     ax_snr.legend(fontsize=7)
@@ -534,5 +536,50 @@ save_presentation_pair(
 )
 
 
+# ---------------------------------------------------------------------------
+# 10: Percent change vs matched loss  (100 * delta / matched)
+# ---------------------------------------------------------------------------
+def build_pct_matrix(mm_rows, matched_loss_by_k):
+    delta_map = {(r["train_k"], r["infer_k"]): r["mean"] for r in mm_rows}
+    mat = np.full((8, 8), np.nan)
+    for a in KS:
+        base = matched_loss_by_k.get(a)
+        if base is None or base == 0:
+            continue
+        for b in KS:
+            d = delta_map.get((a, b), 0.0 if a == b else np.nan)
+            if a == b:
+                mat[a - 1, b - 1] = 0.0
+            elif not np.isnan(d):
+                mat[a - 1, b - 1] = 100.0 * d / base
+    return mat
+
+
+fs_pct = build_pct_matrix(fs_mm, {k: np.mean(v) for k, v in fs_loss.items()})
+mc_pct = build_pct_matrix(mc_mm, {k: np.mean(v) for k, v in mc_loss.items()})
+vmax_pct = max(np.nanmax(np.abs(fs_pct)), np.nanmax(np.abs(mc_pct)))
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5.5), constrained_layout=True)
+for ax, mat, label in zip(axes, [fs_pct, mc_pct], ["Fixed-step", "Same-compute"]):
+    im = ax.imshow(mat, vmin=-vmax_pct, vmax=vmax_pct, cmap="RdBu_r", aspect="auto")
+    ax.set_xticks(range(8)); ax.set_xticklabels([f"k_infer={k}" for k in KS], rotation=45, ha="right")
+    ax.set_yticks(range(8)); ax.set_yticklabels([f"k_train={k}" for k in KS])
+    ax.set_title(f"% change vs matched loss — {label} 8-seed\n100 × delta / matched(train_k); diagonal=0%")
+    ax.set_xlabel("Inference k"); ax.set_ylabel("Train k")
+    annotate_cells(ax, mat, fmt=".1f", fontsize=6.5, threshold=vmax_pct * 0.5)
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="% change")
+fig.suptitle("Figure 10: Mismatch loss percent change heatmap\nPositive = worse than matched inference; k=8→1 ≈ +335–393%", fontsize=10)
+fig.savefig(OUT / "10_pct_change_comparison.png", dpi=150, bbox_inches="tight")
+plt.close(fig)
+print("wrote 10")
+
+pct_payload = {
+    "formula": "100 * delta / matched_loss(train_k)",
+    "labels": [f"k={k}" for k in KS],
+    "fixed_step": [[round(float(x), 2) if not np.isnan(x) else None for x in row] for row in fs_pct],
+    "same_compute": [[round(float(x), 2) if not np.isnan(x) else None for x in row] for row in mc_pct],
+}
+(OUT / "pct_change_matrices.json").write_text(json.dumps(pct_payload, indent=2), encoding="utf-8")
+print("wrote pct_change_matrices.json")
 print(f"\nAll figures saved to {OUT}/")
 print(f"Presentation-sized single-budget heatmaps saved to {PRES}/")

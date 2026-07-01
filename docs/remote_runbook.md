@@ -28,9 +28,10 @@ quota -s
 ```bash
 git clone https://github.com/2-mean/moe_topk_routing_experiment.git ~/moe_topk_routing_experiment
 cd ~/moe_topk_routing_experiment
-git checkout -b scratch-pilot-v0
+git switch main
+git pull --ff-only
 source ~/miniconda3/bin/activate cas4160
-export PYTHONPATH="$PWD/src"
+python -m pip install -e . --no-deps
 python - <<'PY'
 import torch
 print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))
@@ -56,7 +57,7 @@ Pass criteria:
 tmux new -s matryo_topk
 cd ~/moe_topk_routing_experiment
 source ~/miniconda3/bin/activate cas4160
-export PYTHONPATH="$PWD/src"
+python -m pip install -e . --no-deps
 python -m moe_topk.scratch_pilot --mode full --config configs/scratch_pilot.json --output-root /tmp/2020110906_matryo_topk --device cuda
 ```
 

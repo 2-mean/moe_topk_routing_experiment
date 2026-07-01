@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-29",
+  "generated": "2026-07-02",
   "generator": "scripts/generate_report_heatmaps.py (matplotlib)",
   "directory": "results/report_figures/",
   "figures": [
@@ -11,7 +11,12 @@
     "06_matched_loss_comparison.png",
     "07_nestedness_comparison.png",
     "08_spearman_comparison.png",
-    "09_nestedness_excess_comparison.png"
+    "09_nestedness_excess_comparison.png",
+    "10_pct_change_comparison.png"
+  ],
+  "numeric": [
+    "heatmap_data.json",
+    "pct_change_matrices.json"
   ],
   "presentation": [
     "presentation/01_mismatch_delta_fixed_step.png",

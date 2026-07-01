@@ -1,7 +1,7 @@
 """Regenerate all visual PNG assets (matplotlib figures + manifest).
 
 Canonical output: results/report_figures/
-  01–09 comparison PNGs + presentation/ singles
+  01–10 comparison PNGs + presentation/ singles + numeric JSON
 
 Also exports heatmap_data.json for optional tooling.
 """
@@ -27,7 +27,10 @@ EXPECTED = [
     "07_nestedness_comparison.png",
     "08_spearman_comparison.png",
     "09_nestedness_excess_comparison.png",
+    "10_pct_change_comparison.png",
 ]
+
+NUMERIC = ["heatmap_data.json", "pct_change_matrices.json"]
 
 
 def main():
@@ -41,12 +44,14 @@ def main():
         if p.exists():
             files.append(name)
     pres = sorted(p.name for p in (FIG / "presentation").glob("*.png")) if (FIG / "presentation").exists() else []
+    numeric = [name for name in NUMERIC if (FIG / name).exists()]
 
     manifest = {
         "generated": str(date.today()),
         "generator": "scripts/generate_report_heatmaps.py (matplotlib)",
         "directory": "results/report_figures/",
         "figures": files,
+        "numeric": numeric,
         "presentation": [f"presentation/{n}" for n in pres],
         "regenerate": "python scripts/build_visual_assets.py",
     }

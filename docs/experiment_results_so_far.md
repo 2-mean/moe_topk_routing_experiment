@@ -1,5 +1,9 @@
 # Experiment Results So Far
 
+> **Historical snapshot:** 이 문서는 2026-06-26 시점의 초기 pilot 상태를
+> 보존한다. 이후 완료된 Sparse32 8-seed 주 결과와 현재 claim boundary는
+> [`sparse32_full_report.md`](sparse32_full_report.md)를 사용한다.
+
 Status date: 2026-06-26 KST
 
 This document records completed and currently running experiments with objective

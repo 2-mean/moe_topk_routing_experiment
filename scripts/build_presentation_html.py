@@ -31,6 +31,9 @@ FIGURES = [
      "k=1 관련: ~0.41–0.56 — top1보다 ranking 보존 ↑."),
     ("fig-09", "09_nestedness_excess_comparison.png", "Figure 9 · Nestedness Excess",
      "obs − max(k)/32. cardinality 효과 제거 후 구조 신호. 4-8 pair excess ~0.59."),
+    ("fig-10", "10_pct_change_comparison.png", "Figure 10 · Mismatch Loss Percent Change",
+     "100 × Δloss / matched loss(train_k). k=8→1은 fixed-step +392.67%, same-compute +335.36%. "
+     "matched loss가 작은 행에서는 비율이 커질 수 있으므로 raw Δloss와 함께 읽는다."),
 ]
 
 HTML = """<!DOCTYPE html>

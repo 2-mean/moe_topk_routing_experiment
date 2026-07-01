@@ -2,7 +2,7 @@
 
 > 이 문서는 `sparse32_experiment_report.md`와 `sparse32_baseline_analysis.md`를 통합하고,
 > 실제 수치와 베이스라인 비교를 포함하는 단일 참조 문서다.
-> 2026-06-28 기준, fixed-step/same-compute 8-seed 실험 완료 후 작성.
+> 2026-07-02 기준, fixed-step/same-compute 8-seed 실험과 시각자료를 반영.
 
 ---
 
@@ -65,7 +65,8 @@ k=4가 두 설정의 공통 기준점 (동일 실험).
 
 ### 3.3 Train/Inference k grid
 
-k_train ∈ {1..8}, k_infer ∈ {1..8} → 64 matched runs per budget × 8 seeds = 512 runs
+k_train ∈ {1..8}, k_infer ∈ {1..8} → seed당 64개 train/inference 평가,
+budget당 총 512개 평가. 실제로 학습하는 모델은 seed당 train_k별 8개다.
 
 ---
 
@@ -81,6 +82,12 @@ k_train ∈ {1..8}, k_infer ∈ {1..8} → 64 matched runs per budget × 8 seeds
 | SNR (noise floor) | \|mean_delta\| / std_delta (seed 간 표준편차) | 2.0 (signal threshold) | — |
 
 > **nestedness 주의**: random baseline이 b/E인 것은 "각 token에서 small-k expert가 large-k set에 포함될 기대 확률"이다. 완전한 subset event(small-k 집합 전체가 large-k 집합의 부분집합)의 확률은 이와 다르다. 현재 구현은 per-token overlap recall이므로, "subset 비율"이라는 표현 대신 **"overlap recall"** 로 명시해야 한다.
+
+**Inference top-k 구현**: 각 token의 모든 `gate_logits`에서 `torch.topk`로
+선택한 expert만 남기고, 선택된 logit에 다시 `softmax`를 적용해 weight 합을
+1로 정규화한다. top-k 밖 expert는 sparse dispatch에서 실행하지 않는다.
+따라서 hi→lo의 loss 증가는 선택 expert output mass가 단순히 감소한 결과가
+아니다.
 
 **Sanity gates (모든 실험에서 통과):**
 
@@ -252,6 +259,12 @@ mismatch delta는 각 모델 자신의 matched inference를 baseline (δ = 0)으
 ![Figure 2: Directional asymmetry heatmap — delta(hi→lo) − delta(lo→hi)](../results/report_figures/02_asymmetry_direction.png)
 
 > **읽는 법**: 빨강(하삼각 행>열) = hi→lo가 더 비싸다. k=8→k=1이 가장 짙다. 두 budget에서 동일 패턴.
+
+![Figure 10: Mismatch loss percent change relative to matched loss](../results/report_figures/10_pct_change_comparison.png)
+
+> **변화율 정의**: `100 × mismatch_delta / matched_loss(k_train)`. k=8→1은
+> fixed-step `+392.67%`, same-compute `+335.36%`다. 이 비율은 서로 다른
+> matched-loss scale을 읽기 위한 보조 지표이며, primary metric은 raw delta다.
 
 ---
 
@@ -446,11 +459,10 @@ n=8이므로 인과 주장은 불가하며, 방향성만 서술 가능.
 
 ## 논문화 전 반드시 보강할 것 (우선순위)
 
-### 1순위: Inference top-k 구현 명시
+### 완료: Inference top-k 구현 명시
 
-> k_infer를 바꿀 때 router probability를 재정규화하는가? top-k 외 expert는 drop인가? sparse_dispatch에서 k 변경이 expert output scaling에 어떤 영향을 주는가?
-
-이를 명시하지 않으면 "hi→lo loss 악화가 단순 output mass 감소 때문 아닌가?"라는 반박을 받는다.
+4절에 선택 logit 재정규화, top-k 외 expert drop, sparse dispatch 동작을
+명시했다. 구현 근거는 `src/moe_topk/model.py`의 `TopKMoE.forward`다.
 
 ### 2순위: nestedness 용어 수정
 
@@ -528,9 +540,10 @@ python -m moe_topk.scratch_pilot \
 
 # 8-seed combined run 구성
 python scripts/build_combined_run.py \
-  --source-runs /tmp/.../sparse32_kgrid_fixed_step_3seed/... \
-                /tmp/.../sparse32_kgrid_fixed_step_seed3to7/... \
-  --out-run /tmp/.../sparse32_kgrid_fixed_step_8seed/...
+  --source-run /tmp/.../sparse32_kgrid_fixed_step_3seed/... \
+  --source-run /tmp/.../sparse32_kgrid_fixed_step_seed3to7/... \
+  --output-run /tmp/.../sparse32_kgrid_fixed_step_8seed/... \
+  --experiment-name sparse32_kgrid_fixed_step_8seed
 
 # Baseline analysis (B5 포함)
 python scripts/analyze_training_variability_null.py \

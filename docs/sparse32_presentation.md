@@ -159,6 +159,18 @@ Random baseline 대비 top1_agreement:
 
 ---
 
+# Mismatch Cost: Matched Loss 대비 변화율
+
+![w:900](../results/report_figures/10_pct_change_comparison.png)
+
+`100 × Δloss / matched loss(train_k)`
+
+k=8→1: fixed-step **+392.67%**, same-compute **+335.36%**
+
+비율은 scale 보조 설명이며 primary metric은 raw Δloss
+
+---
+
 # Asymmetry: hi→lo ≫ lo→hi
 
 ![w:900](../results/report_figures/02_asymmetry_direction.png)
